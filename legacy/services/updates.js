@@ -108,13 +108,12 @@ async function workerTick(){
     else scheduleWorker(config.lightWaveAuto?Math.max(60000,dueIn):24*60*60*1000);
   }finally{workerBusy=false}
 }
-function wakeUpdateWorker(){ if(!require('../cloudflare-bindings').isCloudflare()) scheduleWorker(50) }
+function wakeUpdateWorker(){scheduleWorker(50)}
 function startUpdateWorker(){
-  if(require('../cloudflare-bindings').isCloudflare()) return;
   if(workerStarted)return;workerStarted=true;
+  // One startup state read determines the next wake-up. There is no permanent polling loop.
   scheduleWorker(5000);
 }
-
 
 async function markUpdated(id){
   const db=getPool();

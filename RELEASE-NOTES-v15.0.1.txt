@@ -1,0 +1,9 @@
+HSWare Studio v15.0.1
+
+Hostinger Node.js Web App compatibility patch.
+
+Changes:
+- Added Hostinger compatible server.js runtime entry
+- Updated production start command
+- Updated version metadata
+- Prepared package for Node.js 22 hosting environments

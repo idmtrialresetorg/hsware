@@ -1,0 +1,13 @@
+HSWare Studio v15.0.0 Hostinger Compatibility
+
+Node: 22.x
+Framework: Next.js 15.5.2
+Build command: npm run build
+Start command: npm start
+Output directory: .next
+
+Before deployment:
+- Configure SESSION_SECRET (minimum 32 characters)
+- Configure database credentials
+- Change admin credentials
+- Verify npm run build locally

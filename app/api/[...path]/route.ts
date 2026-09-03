@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { env } from 'cloudflare:workers';
-import cfBindings from '../../../legacy/cloudflare-bindings.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import router from '../../../legacy/routes/api.js';
@@ -20,6 +18,7 @@ const diagnostics = diagnosticsModule as any;
 const runtimeConfig = legacyConfig as any;
 const { getPool } = dbModule as any;
 const activity = activityModule as any;
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function safeOperationalError(err: any) {
@@ -93,7 +92,6 @@ function loginError(code: string, nextPath = '/dashboard') {
   return redirect303(`${runtimeConfig.adminPath || '/admin'}?${params.toString()}`);
 }
 async function handleLogin(request: NextRequest) {
-  (cfBindings as any).install(env);
   const body:any = await readBody(request);
   const nextPath = safeNext(body?.next);
   const host = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '')
@@ -142,7 +140,6 @@ async function handleLogin(request: NextRequest) {
   return response;
 }
 async function handle(request: NextRequest, context: { params: Promise<{ path:string[] }> }) {
-  (cfBindings as any).install(env);
   let relative='/'; let requestId=diagnostics.diagnosticId('REQ'); let userId:number|null=null;
   try {
     const {path=[]}=await context.params;

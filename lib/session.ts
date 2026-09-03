@@ -11,7 +11,10 @@ function secret() {
   if (config.nodeEnv === 'production' && config.sessionSecret.length < 32) {
     throw new Error('SESSION_SECRET must be at least 32 characters in production.');
   }
-  return config.sessionSecret || 'development-only-change-me-please';
+  if (!config.sessionSecret) {
+    throw new Error('SESSION_SECRET is required. Configure it in production environment variables.');
+  }
+  return config.sessionSecret;
 }
 function sign(value: string) { return crypto.createHmac('sha256', secret()).update(value).digest('base64url'); }
 export function encodeSession(session: HSWareSession) {

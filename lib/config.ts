@@ -5,8 +5,9 @@ function normalizeAdminPath(value?: string) {
   if (!/^\/[A-Za-z0-9_\/-]+$/.test(route) || ['/', '/api', '/health', '/login'].includes(route)) return '/admin';
   return route;
 }
+
 export const config = {
-  get nodeEnv(){ return process.env.NODE_ENV || 'production'; },
-  get sessionSecret(){ return process.env.SESSION_SECRET || ''; },
-  get adminPath(){ return normalizeAdminPath(process.env.ADMIN_PATH || '/admin'); },
+  nodeEnv: process.env.NODE_ENV || 'production',
+  sessionSecret: process.env.SESSION_SECRET || '',
+  adminPath: normalizeAdminPath(process.env.ADMIN_PATH || '/admin'),
 };

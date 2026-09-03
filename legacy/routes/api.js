@@ -534,7 +534,7 @@ router.get('/backups/:id/download',requireAdmin,async(req,res,next)=>{try{
   const item=await backups.getBackupFile(Number(req.params.id));
   if(!item)return res.status(404).json({ok:false,error:'Backup file not found.'});
   await backups.markDownloaded(Number(req.params.id));
-  if(item.buffer){res.set('Content-Disposition',`attachment; filename="${String(item.filename).replace(/"/g,'')}"`);res.set('Content-Type','application/json; charset=utf-8');res.send(item.buffer)}else res.download(item.filepath,item.filename);
+  res.download(item.filepath,item.filename);
 }catch(e){next(e)}});
 router.post('/backups/restore',raw({type:'application/octet-stream',limit:'100mb'}),...mutate,requireAdmin,async(req,res,next)=>{try{
   if(!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({ok:false,error:'Choose an HSWare JSON backup file first.'});

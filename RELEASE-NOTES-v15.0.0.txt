@@ -1,11 +1,9 @@
-HSWare Studio v15.0.0 - Cloudflare Edition
+HSWare Studio v15.0.0
 
-- Cloudflare Workers deployment via vinext/Vite
-- Hyperdrive MySQL connection support (recommended free DB: TiDB Cloud Starter)
-- Cloudflare R2 persistent JSON backup storage
-- LightWave moved from Node timers to Cloudflare Cron Triggers
-- Published-software-only scheduled update checking retained
-- No permanent background polling process on Workers
-- Daily automatic R2 backup Cron
-- Hostinger filesystem assumptions removed from backup path
-- Google Drive backup upload replaced by R2 in this edition
+Major upgrade from v14.2.1
+
+Changes:
+- Security hardening
+- Session secret enforcement
+- Updated documentation
+- Production deployment guidance
