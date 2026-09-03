@@ -1,0 +1,29 @@
+HSWare Studio v14.1.0
+
+Logo system improvements
+- Six displayed logo slots now use six independent providers:
+  1. Logo.dev Verified Product (800px WebP)
+  2. ln-dev7/logos-apps (SVG)
+  3. Official Website (best verified product logo)
+  4. WinGet Manifest Icons
+  5. Homarr Dashboard Icons (SVG)
+  6. selfh.st Icons (SVG)
+- Logo.dev now tries up to five product identity queries using exact-match search.
+- Logo.dev parent-company and unrelated-domain fallbacks are rejected when product identity cannot be proven.
+- Logo.dev monogram fallback remains disabled (fallback=404).
+- Logo.dev WebP request size increased from 512 to 800 pixels.
+- Optional BRANDFETCH_CLIENT_ID uses the free Brand Search API only as an identity/domain cross-check.
+- Brandfetch Logo API assets are not cached or redistributed by HSWare.
+- Download filenames now reflect the actual Logo.dev image dimensions.
+
+Validation performed
+- node --check legacy/services/winget.js
+- node --check legacy/routes/api.js
+- node --check legacy/config.js
+- node --check public/ui/app.js
+- npm run check:legacy
+- node scripts/check-version.js
+- node scripts/check-catalog-intelligence.js
+- node scripts/check-catalog-expansion.js
+
+Full Next.js build was not run because node_modules is not included in the supplied archive.
