@@ -1,0 +1,52 @@
+:root{
+  --primary:#0052ff;--primary-active:#003ecc;
+  --canvas:#ffffff;--surface:#ffffff;--surface-soft:#f7f7f7;--surface-strong:#eef0f3;
+  --hairline:#dee1e6;
+  --ink:#0a0b0d;--body:#5b616e;--muted:#7c828a;
+  --up:#05b169;--down:#cf202f;--down-soft:rgba(207,32,47,.1);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:24px;--r-pill:100px;--r-full:9999px;
+  --font-body:"Inter",-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --shadow-modal:0 24px 64px rgba(10,11,13,.14);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:var(--font-body);color:var(--ink);background:var(--surface-soft)}
+body{font-size:14.5px;line-height:1.55}
+a{color:inherit}
+button,input{font:inherit}
+.standalone{display:grid;place-items:center;min-height:100vh;padding:24px}
+.standalone-card,.login-card,.health-card{width:min(100%,460px);background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-xl);padding:36px;box-shadow:var(--shadow-modal)}
+.health-card{width:min(100%,720px)}
+.brand-row{display:flex;align-items:center;gap:12px}
+.login-brand{margin-bottom:26px}
+.brand-mark{width:38px;height:38px;border-radius:var(--r-md);background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px;letter-spacing:-.02em}
+.brand-mark.large{width:52px;height:52px;font-size:17px;margin-bottom:18px}
+.brand-title{font-weight:600;font-size:15px;color:var(--ink)}
+.brand-sub{font-size:12px;color:var(--muted);margin-top:2px}
+h1{font-size:22px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+.standalone-card p,.login-card p{margin:0 0 22px;color:var(--muted);line-height:1.6;font-size:13.5px}
+.error-box{border:1px solid var(--down-soft);background:var(--down-soft);color:var(--down);border-radius:var(--r-md);padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:18px}
+.error-box a{color:inherit;font-weight:600;text-decoration:underline}
+.stack-form{display:grid;gap:14px}
+.stack-form label{display:grid;gap:6px;font-weight:600;font-size:13px;color:var(--body)}
+.stack-form input{border:1px solid var(--hairline);background:var(--canvas);padding:0 14px;height:44px;border-radius:var(--r-md);font-size:14px;color:var(--ink);outline:0}
+.stack-form input:focus{border-color:var(--primary);border-width:1.5px}
+.btn{border:1px solid var(--hairline);background:var(--surface-strong);color:var(--ink);padding:0 20px;height:44px;border-radius:var(--r-pill);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{background:var(--hairline)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-active);border-color:var(--primary-active)}
+.btn-block{width:100%}
+.login-help{text-align:center;margin-top:18px;color:var(--muted);font-size:12.5px}
+.login-help a{color:var(--primary);font-weight:600}
+code{background:var(--surface-strong);padding:2px 5px;border-radius:4px;font-family:var(--font-mono);font-size:12px}
+.health-table{width:100%;border-collapse:collapse;margin-top:6px}
+.health-table th,.health-table td{padding:12px 10px;border-bottom:1px solid var(--hairline);text-align:left;font-size:13px}
+.health-table th{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.status-pill{display:inline-flex;border:1px solid var(--hairline);background:var(--surface-strong);padding:4px 9px;border-radius:var(--r-pill);font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.status-pill.ok{background:rgba(5,177,105,.1);border-color:transparent;color:var(--up)}
+.status-pill.bad{background:var(--down-soft);border-color:transparent;color:var(--down)}
+.health-actions{margin-top:22px}
+.panel{background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-lg);padding:24px}
+.panel h2{margin:0 0 8px;font-size:19px}
+.panel p{margin:0 0 18px;color:var(--muted)}
+.btn-secondary{background:var(--surface-strong)}

@@ -1,9 +1,0 @@
-HSWare Studio v15.0.0
-
-Major upgrade from v14.2.1
-
-Changes:
-- Security hardening
-- Session secret enforcement
-- Updated documentation
-- Production deployment guidance

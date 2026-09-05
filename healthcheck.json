@@ -1,6 +1,0 @@
-{
-  "service": "HSWare Studio",
-  "version": "15.0.3",
-  "healthEndpoint": "/api/health",
-  "environment": "production"
-}

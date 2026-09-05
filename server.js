@@ -1,12 +1,6 @@
-const { createServer } = require("http");
-const next = require("next");
-
-const port = process.env.PORT || 3000;
-const app = next({ dev: false });
-const handle = app.getRequestHandler();
-
-app.prepare().then(() => {
-  createServer((req, res) => handle(req, res)).listen(port, () => {
-    console.log(`HSWare Studio running on port ${port}`);
-  });
+// Compatibility launcher for Hostinger deployments that still use server.js
+// as the configured entry file. The actual v4 runtime is run-server.mjs.
+import('./run-server.mjs').catch((err) => {
+  console.error('[HSWare] Failed to start Astro runtime:', err);
+  process.exitCode = 1;
 });

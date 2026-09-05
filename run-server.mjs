@@ -1,0 +1,108 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import express from 'express';
+import helmet from 'helmet';
+import compression from 'compression';
+import cookieSession from 'cookie-session';
+import morgan from 'morgan';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packagedRuntime = fs.existsSync(path.join(__dirname, 'server', 'entry.mjs'));
+const astroEntryPath = packagedRuntime
+  ? path.join(__dirname, 'server', 'entry.mjs')
+  : path.join(__dirname, 'dist', 'server', 'entry.mjs');
+const clientDir = packagedRuntime
+  ? path.join(__dirname, 'client')
+  : path.join(__dirname, 'dist', 'client');
+
+const { handler: astroHandler } = await import(pathToFileURL(astroEntryPath).href);
+const require = createRequire(import.meta.url);
+const config = require('./src/config');
+const state = require('./src/state');
+const { startDatabaseInitialization } = require('./src/init');
+const { startEnrichmentWorker } = require('./src/services/enrichment');
+const { startImportWorker } = require('./src/services/imports');
+const { startBackupWorker } = require('./src/services/backups');
+const { startLiteApksWorker } = require('./src/services/liteapks');
+const { ensureToken } = require('./src/middleware/csrf');
+
+const app = express();
+if (config.trustProxy) app.set('trust proxy', 1);
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
+app.use(compression());
+app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
+app.use(express.urlencoded({ extended: false, limit: '256kb' }));
+app.use(express.json({ limit: '512kb' }));
+app.use(cookieSession({
+  name: 'hsware_session',
+  keys: [config.sessionSecret || 'development-only-change-me'],
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: config.nodeEnv === 'production'
+}));
+app.use(ensureToken);
+
+app.use(express.static(clientDir, {
+  maxAge: 0,
+  etag: true
+}));
+
+app.use((req, res, next) => {
+  res.locals.user = req.session?.user || null;
+  res.locals.active = '';
+  res.locals.state = state;
+  res.locals.appVersion = '4.6.0';
+  next();
+});
+
+app.use(require('./src/routes/health'));
+app.use(require('./src/routes/auth'));
+app.use('/api', require('./src/routes/api'));
+
+const { requireAuth, requireActiveUser } = require('./src/middleware/auth');
+const requireDb = require('./src/middleware/db-ready');
+app.use(requireDb, requireAuth, requireActiveUser);
+app.use((req, res, next) => {
+  if (req.path === '/settings' && req.currentUser?.role !== 'admin') return res.redirect('/');
+  next();
+});
+app.use(astroHandler);
+
+app.use((err, req, res, next) => {
+  console.error('[HSWare] Request error:', err);
+  if (res.headersSent) return next(err);
+  const status = Number(err.status || 500);
+  if (req.originalUrl.startsWith('/api/') || req.path.startsWith('/api/') || req.accepts(['json','html']) === 'json') {
+    return res.status(status).json({ ok: false, error: status >= 500 && config.nodeEnv === 'production' ? 'The request failed. Check Runtime Logs for details.' : (err.message || 'Request failed.') });
+  }
+  res.status(status).render('error', { title: 'Error', active: '', message: status >= 500 && config.nodeEnv === 'production' ? 'The request failed. Check HSWare Health and Hostinger logs.' : (err.message || 'Request failed.') });
+});
+
+app.listen(config.port, '0.0.0.0', () => {
+  console.log(`[HSWare] v4.6.0 Astro workspace listening on port ${config.port}`);
+  startDatabaseInitialization();
+  startEnrichmentWorker();
+  startImportWorker();
+  startBackupWorker();
+  startLiteApksWorker();
+});

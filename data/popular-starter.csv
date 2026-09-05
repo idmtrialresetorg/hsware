@@ -1,0 +1,76 @@
+rank,package_id,name,category
+1,Google.Chrome,Google Chrome,Browser
+2,Mozilla.Firefox,Mozilla Firefox,Browser
+3,VideoLAN.VLC,VLC media player,Media
+4,7zip.7zip,7-Zip,Utilities
+5,RARLab.WinRAR,WinRAR,Utilities
+6,Notepad++.Notepad++,Notepad++,Developer
+7,Microsoft.VisualStudioCode,Visual Studio Code,Developer
+8,OBSProject.OBSStudio,OBS Studio,Media
+9,Discord.Discord,Discord,Communication
+10,Telegram.TelegramDesktop,Telegram Desktop,Communication
+11,Zoom.Zoom,Zoom,Communication
+12,Spotify.Spotify,Spotify,Media
+13,Valve.Steam,Steam,Games
+14,EpicGames.EpicGamesLauncher,Epic Games Launcher,Games
+15,Git.Git,Git,Developer
+16,GitHub.GitHubDesktop,GitHub Desktop,Developer
+17,Audacity.Audacity,Audacity,Media
+18,GIMP.GIMP,GIMP,Graphics
+19,BlenderFoundation.Blender,Blender,Graphics
+20,Inkscape.Inkscape,Inkscape,Graphics
+21,HandBrake.HandBrake,HandBrake,Media
+22,qBittorrent.qBittorrent,qBittorrent,Internet
+23,Bitwarden.Bitwarden,Bitwarden,Security
+24,voidtools.Everything,Everything,Utilities
+25,Oracle.VirtualBox,VirtualBox,Virtualization
+26,Docker.DockerDesktop,Docker Desktop,Developer
+27,PuTTY.PuTTY,PuTTY,Developer
+28,WinSCP.WinSCP,WinSCP,Internet
+29,FileZilla.Client,FileZilla Client,Internet
+30,TeamViewer.TeamViewer,TeamViewer,Remote Access
+31,AnyDeskSoftwareGmbH.AnyDesk,AnyDesk,Remote Access
+32,RustDesk.RustDesk,RustDesk,Remote Access
+33,CPUID.CPU-Z,CPU-Z,System
+34,TechPowerUp.GPU-Z,GPU-Z,System
+35,CrystalDewWorld.CrystalDiskInfo,CrystalDiskInfo,System
+36,CrystalDewWorld.CrystalDiskMark,CrystalDiskMark,System
+37,Microsoft.PowerToys,Microsoft PowerToys,Utilities
+38,Microsoft.WindowsTerminal,Windows Terminal,Developer
+39,Microsoft.Sysinternals.ProcessExplorer,Process Explorer,System
+40,Microsoft.Sysinternals.Autoruns,Autoruns,System
+41,Greenshot.Greenshot,Greenshot,Graphics
+42,ShareX.ShareX,ShareX,Graphics
+43,Flameshot.Flameshot,Flameshot,Graphics
+44,SumatraPDF.SumatraPDF,SumatraPDF,PDF
+45,Adobe.Acrobat.Reader.64-bit,Adobe Acrobat Reader,PDF
+46,calibre.calibre,calibre,Productivity
+47,LibreOffice.LibreOffice,LibreOffice,Productivity
+48,ONLYOFFICE.DesktopEditors,ONLYOFFICE Desktop Editors,Productivity
+49,Microsoft.Edge,Microsoft Edge,Browser
+50,OpenJS.NodeJS.LTS,Node.js LTS,Developer
+51,Python.Python.3.13,Python 3.13,Developer
+52,Postman.Postman,Postman,Developer
+53,Insomnia.Insomnia,Insomnia,Developer
+54,JetBrains.Toolbox,JetBrains Toolbox,Developer
+55,Microsoft.VisualStudio.2022.Community,Visual Studio 2022 Community,Developer
+56,OpenVPNTechnologies.OpenVPNConnect,OpenVPN Connect,Security
+57,WireGuard.WireGuard,WireGuard,Security
+58,Proton.ProtonVPN,Proton VPN,Security
+59,Cloudflare.Warp,Cloudflare WARP,Security
+60,Malwarebytes.Malwarebytes,Malwarebytes,Security
+61,KeePassXCTeam.KeePassXC,KeePassXC,Security
+62,PeaZip.PeaZip,PeaZip,Utilities
+63,NanaZip.NanaZip,NanaZip,Utilities
+64,Microsoft.OneDrive,Microsoft OneDrive,Cloud
+65,Dropbox.Dropbox,Dropbox,Cloud
+66,Google.GoogleDrive,Google Drive,Cloud
+67,Apple.iTunes,iTunes,Media
+68,Apple.iCloud,iCloud,Cloud
+69,Microsoft.Teams,Microsoft Teams,Communication
+70,SlackTechnologies.Slack,Slack,Communication
+71,Signal.Signal,Signal,Communication
+72,WhatsApp.WhatsApp,WhatsApp,Communication
+73,Wondershare.Filmora,Wondershare Filmora,Media
+74,BlackmagicDesign.DaVinciResolve,DaVinci Resolve,Media
+75,Brave.Brave,Brave Browser,Browser
