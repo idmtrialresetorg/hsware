@@ -1,448 +1,97 @@
-const express = require('express');
-const config = require('../config');
-const state = require('../state');
-const { getPool, hasDbConfig } = require('../db');
-const { requireAuth, requireActiveUser, requireAdmin } = require('../middleware/auth');
-const requireDb = require('../middleware/db-ready');
-const { verifyToken } = require('../middleware/csrf');
-const imports = require('../services/imports');
-const updates = require('../services/updates');
-const { backfillVersionDates } = require('../services/winget');
-const { prepareSoftware } = require('../services/package-source');
-const liteapks = require('../services/liteapks');
-const androidMedia = require('../services/android-media');
-const { queueSoftware } = require('../services/enrichment');
-const { hasToken } = require('../services/github');
-const { compareVersions } = require('../utils/version');
-const maintenance = require('../services/maintenance');
-const backups = require('../services/backups');
-const users = require('../services/users');
-const workClaims = require('../services/work-claims');
-const activity = require('../services/activity');
-const notifications = require('../services/notifications');
-const { withRequirementFallbacks } = require('../services/requirements');
+const express=require('express');
+const config=require('../config');
+const state=require('../state');
+const{getPool,hasDbConfig}=require('../db');
+const{requireAuth,requireActiveUser,requireAdmin}=require('../middleware/auth');
+const requireDb=require('../middleware/db-ready');
+const{verifyToken}=require('../middleware/csrf');
+const resolver=require('../services/apk-resolver');
+const media=require('../services/apk-media');
+const updates=require('../services/apk-updates');
+const publishing=require('../services/publishing');
+const maintenance=require('../services/maintenance');
+const backups=require('../services/backups');
+const users=require('../services/users');
+const claims=require('../services/app-claims');
+const activity=require('../services/activity');
+const notifications=require('../services/notifications');
 
-const router = express.Router();
-router.use(requireDb, requireAuth, requireActiveUser);
-const mutate = [verifyToken];
+const router=express.Router();router.use(requireDb,requireAuth,requireActiveUser);const mutate=[verifyToken];
+function parseObject(v){if(!v)return{};if(typeof v==='object'&&!Array.isArray(v))return v;try{const o=JSON.parse(v);return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}catch{return{}}}
+function parseTags(v){if(!v)return[];try{const a=JSON.parse(v);return Array.isArray(a)?a:[]}catch{return[]}}
+function dateOnly(v){if(!v)return null;if(typeof v==='string'){const m=v.match(/^(\d{4}-\d{2}-\d{2})/);if(m)return m[1]}const d=new Date(v);return Number.isNaN(d.getTime())?null:d.toISOString().slice(0,10)}
+function completeness(r){const checks=[r.name,r.source_page_url,r.current_version,r.category,r.developer,r.file_size_bytes,r.minimum_os_version,r.apk_type,r.source_metadata_json];return Math.round(checks.filter(Boolean).length/checks.length*100)}
+function claimFromRow(r){if(!r.work_claim_user_id)return null;return{appId:Number(r.id),userId:Number(r.work_claim_user_id),name:r.work_claim_user_name||'User',role:r.work_claim_user_role||'partner',roleLabel:r.work_claim_user_role==='admin'?'Admin':'Partner',claimedAt:r.work_claimed_at||null,lastHeartbeatAt:r.work_claim_heartbeat_at||null}}
+function appJson(r){return{id:Number(r.id),packageId:r.package_id,sourcePackageId:r.source_package_id||null,sourcePageUrl:r.source_page_url||null,sourceUpdatedAt:dateOnly(r.source_updated_at),sourceMeta:parseObject(r.source_metadata_json),media:{iconUrl:parseObject(r.source_metadata_json).iconUrl||null,coverImageUrl:parseObject(r.source_metadata_json).coverImageUrl||null,screenshots:parseObject(r.source_metadata_json).screenshots||[]},name:r.name,developer:r.developer||'',version:r.current_version||'',category:r.category||'Other',sourceSection:r.source_section||'apps',categorySlug:r.category_slug||null,categoryUrl:r.category_url||null,ratingValue:r.rating_value==null?null:Number(r.rating_value),ratingCount:r.rating_count==null?null:Number(r.rating_count),modInfo:r.mod_info||null,popularityRank:r.source_popularity_rank==null?null:Number(r.source_popularity_rank),trendingRank:r.source_trending_rank==null?null:Number(r.source_trending_rank),popularityScore:Number(r.popularity_score||0),trendingScore:Number(r.trending_score||0),description:r.description||null,officialUrl:r.official_url||null,apkType:r.apk_type||'APK',architecture:r.architecture||'Android',fileSizeBytes:r.file_size_bytes==null?null:Number(r.file_size_bytes),minimumOsVersion:r.minimum_os_version||null,language:r.language||'English',licenseName:r.license_name||null,downloadCount:r.download_count==null?null:Number(r.download_count),tags:parseTags(r.tags_json),published:Boolean(r.published),publishedAt:r.published_at||null,importedAt:r.workspace_added_at||r.created_at||null,latestVersion:r.latest_version||null,updateAvailable:Boolean(r.update_available),lastCheckedAt:r.last_checked_at||null,updateError:r.update_error||null,metadataStatus:r.metadata_status||'ready',metadataRevision:Number(r.metadata_revision||1),metadataError:r.metadata_error||null,metadataUpdatedAt:r.metadata_updated_at||null,createdAt:r.created_at||null,updatedAt:r.updated_at||null,completeness:completeness(r),claim:claimFromRow(r)}}
+async function counts(){const[[r]]=await getPool().query(`SELECT COUNT(*) total,SUM(published=0) drafts,SUM(published=1) published,SUM(update_available=1) updates,SUM(metadata_status='ready' AND current_version IS NOT NULL AND source_page_url IS NOT NULL) ready FROM apps`);return{total:Number(r?.total||0),drafts:Number(r?.drafts||0),published:Number(r?.published||0),updates:Number(r?.updates||0),ready:Number(r?.ready||0)}}
+async function appRow(id){await claims.pruneStaleClaims(getPool(),Number(id));const[[r]]=await getPool().query(`SELECT a.*,c.user_id work_claim_user_id,c.claimed_at work_claimed_at,c.last_heartbeat_at work_claim_heartbeat_at,u.name work_claim_user_name,u.role work_claim_user_role FROM apps a LEFT JOIN app_work_claims c ON c.app_id=a.id LEFT JOIN users u ON u.id=c.user_id WHERE a.id=? LIMIT 1`,[Number(id)]);return r||null}
+async function appRowWithMedia(id){const r=await appRow(id);if(!r)return null;const[items]=await getPool().query('SELECT media_type,remote_url,sort_order FROM apk_media WHERE app_id=? ORDER BY FIELD(media_type,\'icon\',\'cover\',\'screenshot\'),sort_order,id',[Number(id)]);if(items.length){const meta=parseObject(r.source_metadata_json),shots=items.filter(x=>x.media_type==='screenshot').map(x=>x.remote_url);meta.iconUrl=meta.iconUrl||items.find(x=>x.media_type==='icon')?.remote_url||null;meta.coverImageUrl=meta.coverImageUrl||items.find(x=>x.media_type==='cover')?.remote_url||null;if(!Array.isArray(meta.screenshots)||!meta.screenshots.length)meta.screenshots=shots;r.source_metadata_json=JSON.stringify(meta)}return r}
+function userJson(row){return users.publicUser({...row,avatar_blob:row.has_avatar?Buffer.from([1]):row.avatar_blob})}
+function lockedResponse(res,claim){return res.status(423).json({ok:false,error:`${claim?.name||'Another user'} is currently working on this app.`,claim})}
 
-function parseTags(value) {
-  if (!value) return [];
-  try { const out = JSON.parse(value); return Array.isArray(out) ? out : []; } catch { return []; }
-}
-function parseObject(value) {
-  if (!value) return {};
-  if (typeof value === 'object' && !Array.isArray(value)) return value;
-  try { const out = JSON.parse(value); return out && typeof out === 'object' && !Array.isArray(out) ? out : {}; } catch { return {}; }
-}
-function dateOnly(value) {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-}
-function completeness(r, historyCount = null) {
-  const lite=String(r?.source_type||'winget').toLowerCase()==='liteapks';
-  const checks = lite
-    ? [r.name,r.package_id,r.category,r.publisher,r.current_version,r.source_page_url,r.architecture,r.installer_type,r.description,r.minimum_os_version]
-    : [r.name,r.package_id,r.category,r.publisher,r.current_version,r.official_url,r.installer_url,r.architecture,r.installer_type,r.sha256,r.description];
-  if (historyCount !== null) checks.push(Number(historyCount || 0) > 0);
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-}
-function claimFromSoftwareRow(r) {
-  if (!r.work_claim_user_id) return null;
-  return {
-    softwareId: Number(r.id),
-    userId: Number(r.work_claim_user_id),
-    name: r.work_claim_user_name || 'User',
-    role: r.work_claim_user_role || 'partner',
-    roleLabel: r.work_claim_user_role === 'admin' ? 'Admin' : 'Partner',
-    claimedAt: r.work_claimed_at || null,
-    lastHeartbeatAt: r.work_claim_heartbeat_at || null
-  };
-}
-function softwareJson(r) {
-  const req = withRequirementFallbacks(r);
-  return {
-    id:Number(r.id), packageId:r.package_id, sourcePackageId:r.source_package_id||null, sourceType:r.source_type||'winget', platformKey:r.platform_key||'windows', sourcePageUrl:r.source_page_url||null, sourceUpdatedAt:dateOnly(r.source_updated_at), sourceMeta:parseObject(r.source_metadata_json),
-    name:r.name, publisher:r.publisher||'', developer:r.developer_name||r.author||r.publisher||'', author:r.author||'', version:r.current_version||'', category:r.category||'Uncategorized',
-    published:Boolean(r.published), priority:r.priority_rank==null?null:Number(r.priority_rank), demandScore:r.demand_score==null?null:Number(r.demand_score), description:r.description||null,
-    officialUrl:r.official_url||null, installerUrl:r.installer_url||null, architecture:r.architecture||null, installerType:r.installer_type||null,
-    language:req.language, platform:req.platform, processor:req.processor, minimumOsVersion:req.minimumOsVersion,
-    ramRequirement:req.ramRequirement, storageRequirement:req.storageRequirement, graphicsRequirement:req.graphicsRequirement, requirementEstimates:req.estimated, requirementsSourceUrl:r.requirements_source_url||null,
-    downloadCount:r.download_count==null?null:Number(r.download_count), downloadCountSource:r.download_count_source||null,
-    sha256:r.sha256||null, fileSizeBytes:r.file_size_bytes==null?null:Number(r.file_size_bytes), latestVersion:r.latest_version||null, latestInstallerUrl:r.latest_installer_url||null,
-    updateAvailable:Boolean(r.update_available), lastCheckedAt:r.last_checked_at||null, updateError:r.update_error||null,
-    enrichmentStatus:r.enrichment_status||'pending', metadataRevision:Number(r.metadata_revision||0), enrichmentError:r.enrichment_error||null, enrichedAt:r.enriched_at||null,
-    enrichmentAttempts:Number(r.enrichment_attempts||0), lastEnrichmentAttemptAt:r.last_enrichment_attempt_at||null,
-    linkStatus:r.link_status||'unknown', linkCheckedAt:r.link_checked_at||null, createdAt:r.created_at||null,
-    importedAt:r.workspace_added_at||r.created_at||null, publishedAt:r.published_at||null, lastOpenedAt:r.last_opened_at||null,
-    licenseName:r.license_name||null, tags:parseTags(r.tags_json), completeness:completeness(r),
-    claim: claimFromSoftwareRow(r)
-  };
-}
-async function counts() {
-  const db = getPool();
-  const [[row]] = await db.query(`SELECT
-    COUNT(*) AS total,
-    SUM(published=0) AS unpublished,
-    SUM(published=1) AS published,
-    SUM(update_available=1) AS updates,
-    COUNT(DISTINCT CASE WHEN publisher IS NOT NULL AND publisher<>'' THEN publisher END) AS active_publishers,
-    SUM(enrichment_status='ready' AND current_version IS NOT NULL AND ((source_type='liteapks' AND source_page_url IS NOT NULL) OR (COALESCE(source_type,'winget')<>'liteapks' AND installer_url IS NOT NULL))) AS ready,
-    SUM(COALESCE(platform_key,'windows')='windows') AS desktop_total,
-    SUM(COALESCE(platform_key,'windows')='windows' AND published=0) AS desktop_unpublished,
-    SUM(COALESCE(platform_key,'windows')='windows' AND published=1) AS desktop_published,
-    SUM(COALESCE(platform_key,'windows')='windows' AND update_available=1) AS desktop_updates,
-    SUM(COALESCE(platform_key,'windows')='windows' AND enrichment_status='ready' AND current_version IS NOT NULL AND installer_url IS NOT NULL) AS desktop_ready,
-    SUM(platform_key='android') AS android_total,
-    SUM(platform_key='android' AND published=0) AS android_unpublished,
-    SUM(platform_key='android' AND published=1) AS android_published,
-    SUM(platform_key='android' AND update_available=1) AS android_updates,
-    SUM(platform_key='android' AND enrichment_status='ready' AND current_version IS NOT NULL AND source_page_url IS NOT NULL) AS android_ready
-    FROM software WHERE workspace_added=1`);
-  const n = key => Number(row?.[key] || 0);
-  return {
-    total:n('total'), unpublished:n('unpublished'), published:n('published'), ready:n('ready'), updates:n('updates'), activePublishers:n('active_publishers'),
-    windows:n('desktop_total'), android:n('android_total'),
-    desktopTotal:n('desktop_total'), desktopUnpublished:n('desktop_unpublished'), desktopPublished:n('desktop_published'), desktopUpdates:n('desktop_updates'), desktopReady:n('desktop_ready'),
-    androidTotal:n('android_total'), androidUnpublished:n('android_unpublished'), androidPublished:n('android_published'), androidUpdates:n('android_updates'), androidReady:n('android_ready')
-  };
-}
-function userJson(row) {
-  return users.publicUser({ ...row, avatar_blob: row.has_avatar ? Buffer.from([1]) : row.avatar_blob });
-}
-function lockedResponse(res, claim) {
-  return res.status(423).json({ ok:false, error:`${claim?.name || 'Another user'} is currently working on this software.`, claim });
-}
-async function softwareRow(id) {
-  await workClaims.pruneStaleClaims(getPool(), Number(id));
-  const [[row]] = await getPool().query(`SELECT s.*,c.user_id AS work_claim_user_id,c.claimed_at AS work_claimed_at,c.last_heartbeat_at AS work_claim_heartbeat_at,
-    cu.name AS work_claim_user_name,cu.role AS work_claim_user_role
-    FROM software s LEFT JOIN software_work_claims c ON c.software_id=s.id LEFT JOIN users cu ON cu.id=c.user_id
-    WHERE s.id=? LIMIT 1`, [Number(id)]);
-  return row || null;
-}
+router.get('/bootstrap',async(req,res,next)=>{try{const admin=req.currentUser.role==='admin';res.json({ok:true,csrfToken:req.session.csrfToken,user:userJson({...req.currentUser,has_avatar:req.currentUser.has_avatar}),counts:await counts(),config:{resolverBaseUrl:resolver.BASE_URL,resolverDailyPages:config.apkResolverDailyPages,...(admin?{nodeEnv:config.nodeEnv,dbName:config.db.database}:{})},resolverSync:await resolver.getSyncState(),updateScan:await updates.state(),backup:admin?await backups.state():null,notificationSummary:await notifications.summary(req.currentUser.id)})}catch(e){next(e)}});
 
-router.get('/bootstrap', async(req,res,next)=>{try{
-  const isAdmin=req.currentUser.role==='admin';
-  const user=userJson({ ...req.currentUser, has_avatar:req.currentUser.has_avatar });
-  res.json({
-    ok:true, csrfToken:req.session.csrfToken, user, counts:await counts(),
-    config:{
-      autoImportMax:imports.MAX_AUTO_TARGET,catalogTarget:config.catalogTarget,mediaEnabled:false,
-      liteapksEnabled:true,liteapksBaseUrl:liteapks.BASE_URL,liteapksDailyPages:config.liteapksDailyPages,
-      ...(isAdmin?{githubConfigured:hasToken(),nodeEnv:config.nodeEnv,dbName:config.db.database}: {})
-    },
-    liteapksSync:await liteapks.getSyncState(),
-    importJob:await imports.currentJob(),
-    backup:isAdmin?await backups.state():null,
-    notificationSummary:await notifications.summary(req.currentUser.id)
-  });
+router.get('/activity',async(req,res,next)=>{try{const data=await activity.list({viewer:req.currentUser,limit:req.query.limit,offset:req.query.offset,action:req.query.action,userId:req.query.userId,q:req.query.q,from:req.query.from,to:req.query.to,includeTransient:req.currentUser.role==='admin'&&String(req.query.includeTransient||'')==='1'});res.json({ok:true,...data,filters:await activity.filters(req.currentUser)})}catch(e){next(e)}});
+router.get('/activity/recent',async(req,res,next)=>{try{res.json({ok:true,...await activity.recent(req.currentUser,Math.min(12,Number(req.query.limit||8)))})}catch(e){next(e)}});
+router.get('/notifications',async(req,res,next)=>{try{res.json({ok:true,items:await notifications.list(req.currentUser.id,{limit:req.query.limit,unreadOnly:String(req.query.unreadOnly||'')==='1'}),summary:await notifications.summary(req.currentUser.id)})}catch(e){next(e)}});
+router.post('/notifications/read',...mutate,async(req,res,next)=>{try{if(req.body?.all)await notifications.markAllRead(req.currentUser.id);else await notifications.markRead(req.currentUser.id,req.body?.ids||[]);res.json({ok:true,summary:await notifications.summary(req.currentUser.id)})}catch(e){next(e)}});
+
+router.get('/apps',async(req,res,next)=>{try{
+  const scope=String(req.query.scope||'all').toLowerCase(),q=String(req.query.q||'').trim().slice(0,120),section=String(req.query.section||'all').toLowerCase(),category=String(req.query.category||'').trim().slice(0,160),sort=String(req.query.sort||'latest').toLowerCase();
+  const perPage=Math.max(1,Math.min(100,Number(req.query.perPage||req.query.limit||20)||20)),requestedPage=Math.max(1,Number(req.query.page||1)||1),where=[],params=[];
+  if(scope==='drafts'||scope==='unpublished')where.push('a.published=0');else if(scope==='published')where.push('a.published=1');else if(scope==='updates')where.push('a.update_available=1');
+  if(section==='apps'||section==='games'){where.push('a.source_section=?');params.push(section)}
+  if(category){where.push('a.category_slug=?');params.push(category)}
+  if(q){where.push('(a.name LIKE ? OR a.developer LIKE ? OR a.source_package_id LIKE ? OR a.package_id LIKE ? OR a.category LIKE ?)');const like=`%${q}%`;params.push(like,like,like,like,like)}
+  const ws=where.length?`WHERE ${where.join(' AND ')}`:'';const [[totalRow]]=await getPool().query(`SELECT COUNT(*) total FROM apps a ${ws}`,params);const total=Number(totalRow?.total||0),pages=Math.max(1,Math.ceil(total/perPage)),page=Math.min(requestedPage,pages),offset=(page-1)*perPage;
+  const orders={popular:'CASE WHEN a.source_popularity_rank IS NULL THEN 1 ELSE 0 END,a.source_popularity_rank ASC,a.popularity_score DESC,a.download_count DESC,a.id DESC',trending:'CASE WHEN a.source_trending_rank IS NULL THEN 1 ELSE 0 END,a.source_trending_rank ASC,a.trending_score DESC,a.source_updated_at DESC,a.id DESC',name:'a.name ASC,a.id ASC',latest:'COALESCE(a.source_updated_at,DATE(a.updated_at)) DESC,a.updated_at DESC,a.id DESC'};const order=orders[sort]||orders.latest;
+  const[rows]=await getPool().query(`SELECT a.*,c.user_id work_claim_user_id,c.claimed_at work_claimed_at,c.last_heartbeat_at work_claim_heartbeat_at,u.name work_claim_user_name,u.role work_claim_user_role FROM apps a LEFT JOIN app_work_claims c ON c.app_id=a.id LEFT JOIN users u ON u.id=c.user_id ${ws} ORDER BY ${order} LIMIT ? OFFSET ?`,[...params,perPage,offset]);
+  res.json({ok:true,apps:rows.map(appJson),counts:await counts(),pagination:{page,perPage,total,pages,from:total?offset+1:0,to:Math.min(offset+rows.length,total)},filters:{scope,section,category,sort,q}})
 }catch(e){next(e)}});
+router.get('/apps/:id',async(req,res,next)=>{try{const row=await appRowWithMedia(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const[versions]=await getPool().query('SELECT version,source_page_url,file_size_bytes,architecture,apk_type,release_date,release_date_source FROM apk_versions WHERE app_id=? ORDER BY COALESCE(release_date,\'1900-01-01\') DESC,id DESC LIMIT 25',[Number(req.params.id)]);const app=appJson(row);app.versions=versions.map(v=>({version:v.version,sourcePageUrl:v.source_page_url||null,fileSizeBytes:v.file_size_bytes==null?null:Number(v.file_size_bytes),architecture:v.architecture||null,apkType:v.apk_type||null,updatedDate:dateOnly(v.release_date),dateSource:v.release_date_source||null}));res.json({ok:true,app})}catch(e){next(e)}});
+router.post('/apps/import',...mutate,async(req,res,next)=>{try{const sourcePageUrl=resolver.normalizeSourceUrl(req.body?.sourcePageUrl||'');if(!sourcePageUrl)return res.status(400).json({ok:false,error:'Enter a valid APK source page URL.'});const app=await resolver.ensureManagedFromUrl(sourcePageUrl);await activity.record(req.currentUser.id,'app_imported',{appId:app.id,details:{sourcePageUrl}});res.json({ok:true,app:appJson(await appRow(app.id))})}catch(e){next(e)}});
+router.post('/apps/:id/refresh',...mutate,async(req,res,next)=>{try{const claim=await claims.ensureNotOwnedByOther(req.params.id,req.currentUser);if(claim&&claim.userId!==Number(req.currentUser.id))return lockedResponse(res,claim);const app=await resolver.enrichManagedAppById(Number(req.params.id));res.json({ok:true,app:appJson(await appRow(app.id))})}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
+router.post('/apps/:id/toggle-published',...mutate,async(req,res,next)=>{try{const row=await appRow(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const claim=await claims.ensureNotOwnedByOther(req.params.id,req.currentUser);if(claim&&claim.userId!==Number(req.currentUser.id))return lockedResponse(res,claim);const target=!Boolean(row.published);if(target){const prep=await resolver.prepareApp(Number(req.params.id));if(!prep.app.current_version||!prep.app.source_page_url)return res.status(409).json({ok:false,error:prep.warning||'A current version and APK source page are required before publishing.'})}await publishing.setPublished(Number(req.params.id),target,req.currentUser.id);await claims.releaseOwned(req.params.id,req.currentUser.id);res.json({ok:true,published:target,counts:await counts()})}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
+router.post('/apps/:id/mark-updated',...mutate,async(req,res,next)=>{try{await claims.ensureNotOwnedByOther(req.params.id,req.currentUser);await updates.markUpdated(Number(req.params.id));await activity.record(req.currentUser.id,'app_marked_updated',{appId:Number(req.params.id)});res.json({ok:true})}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
+router.post('/apps/:id/download/resolve',...mutate,async(req,res,next)=>{try{res.json({ok:true,...await resolver.resolveDownloadForApp(Number(req.params.id))})}catch(e){next(e)}});
+router.get('/apps/:id/media/icon',async(req,res,next)=>{try{const row=await appRowWithMedia(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const file=await media.iconDownload(row);if(String(req.query.inline||'')==='1')res.setHeader('Content-Disposition',`inline; filename="${file.filename}"`);else res.attachment(file.filename);res.type(file.mime).send(file.buffer)}catch(e){next(e)}});
+router.get('/apps/:id/media/cover',async(req,res,next)=>{try{const row=await appRowWithMedia(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const file=await media.coverDownload(row);if(String(req.query.inline||'')==='1')res.setHeader('Content-Disposition',`inline; filename="${file.filename}"`);else res.attachment(file.filename);res.type(file.mime).send(file.buffer)}catch(e){next(e)}});
+router.get('/apps/:id/media/screenshot/:index',async(req,res,next)=>{try{const row=await appRowWithMedia(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const file=await media.screenshotDownload(row,Number(req.params.index));if(String(req.query.inline||'')==='1')res.setHeader('Content-Disposition',`inline; filename="${file.filename}"`);else res.attachment(file.filename);res.type(file.mime).send(file.buffer)}catch(e){next(e)}});
+router.get('/apps/:id/media.zip',async(req,res,next)=>{try{const row=await appRowWithMedia(req.params.id);if(!row)return res.status(404).json({ok:false,error:'App not found.'});const file=await media.mediaPack(row);res.attachment(file.filename);res.type('application/zip').send(file.buffer)}catch(e){next(e)}});
 
-router.get('/activity',async(req,res,next)=>{try{
-  const data=await activity.list({
-    viewer:req.currentUser,
-    limit:req.query.limit,offset:req.query.offset,action:req.query.action,userId:req.query.userId,q:req.query.q,from:req.query.from,to:req.query.to,
-    includeTransient:req.currentUser.role==='admin'&&String(req.query.includeTransient||'')==='1'
-  });
-  res.json({ok:true,...data,filters:await activity.filters(req.currentUser)});
-}catch(e){next(e)}});
-router.get('/activity/recent',async(req,res,next)=>{try{const data=await activity.recent(req.currentUser,Math.min(12,Number(req.query.limit||8)));res.json({ok:true,...data})}catch(e){next(e)}});
+router.get('/taxonomy',async(req,res,next)=>{try{res.json({ok:true,...await resolver.taxonomyState()})}catch(e){next(e)}});
+router.post('/taxonomy/refresh',...mutate,requireAdmin,async(req,res,next)=>{try{const taxonomy=await resolver.refreshTaxonomy();await resolver.refreshRankings(Number(req.body?.rankingLimit||120));res.json({ok:true,...taxonomy})}catch(e){next(e)}});
+router.post('/rankings/refresh',...mutate,requireAdmin,async(req,res,next)=>{try{res.json({ok:true,...await resolver.refreshRankings(Number(req.body?.limit||120))})}catch(e){next(e)}});
 
-router.get('/notifications/summary',async(req,res,next)=>{try{res.json({ok:true,...await notifications.summary(req.currentUser.id)})}catch(e){next(e)}});
-router.get('/notifications',async(req,res,next)=>{try{
-  const items=await notifications.list(req.currentUser.id,{limit:req.query.limit,unreadOnly:String(req.query.unreadOnly||'')==='1'});
-  res.json({ok:true,items,summary:await notifications.summary(req.currentUser.id)});
-}catch(e){next(e)}});
-router.post('/notifications/read',...mutate,async(req,res,next)=>{try{
-  const ids=Array.isArray(req.body?.ids)?req.body.ids:[];
-  const changed=req.body?.all?await notifications.markAllRead(req.currentUser.id):await notifications.markRead(req.currentUser.id,ids);
-  res.json({ok:true,changed,summary:await notifications.summary(req.currentUser.id)});
-}catch(e){next(e)}});
+router.get('/resolver/search',async(req,res,next)=>{try{res.json({ok:true,results:await resolver.searchCatalog(req.query.q||'',30)})}catch(e){next(e)}});
+router.get('/resolver/state',async(req,res,next)=>{try{res.json({ok:true,state:await resolver.getSyncState()})}catch(e){next(e)}});
+router.post('/resolver/sync',...mutate,requireAdmin,async(req,res,next)=>{try{res.json({ok:true,state:await resolver.startSync({mode:String(req.body?.mode||'daily'),requestedBy:req.currentUser.id,force:Boolean(req.body?.force),limit:req.body?.limit})})}catch(e){next(e)}});
+router.post('/resolver/step',...mutate,requireAdmin,async(req,res,next)=>{try{res.json({ok:true,state:await resolver.step()})}catch(e){next(e)}});
+router.post('/resolver/stop',...mutate,requireAdmin,async(req,res,next)=>{try{res.json({ok:true,state:await resolver.stopSync()})}catch(e){next(e)}});
+router.get('/updates/state',async(req,res,next)=>{try{res.json({ok:true,state:await updates.state()})}catch(e){next(e)}});
+router.post('/updates/start',...mutate,async(req,res,next)=>{try{res.json({ok:true,state:await updates.start(req.currentUser.id,req.body?.limit)})}catch(e){next(e)}});
+router.post('/updates/step',...mutate,async(req,res,next)=>{try{res.json({ok:true,state:await updates.step()})}catch(e){next(e)}});
+router.post('/updates/stop',...mutate,async(req,res,next)=>{try{res.json({ok:true,state:await updates.stop()})}catch(e){next(e)}});
 
-router.get('/software', async(req,res,next)=>{try{
-  const db=getPool(); await workClaims.pruneStaleClaims(db); const scope=String(req.query.scope||'all'); const q=String(req.query.q||'').trim(); const platform=String(req.query.platform||'all').toLowerCase(); let where='s.workspace_added=1'; const params=[];
-  if(scope==='unpublished')where+=' AND s.published=0'; else if(scope==='published')where+=' AND s.published=1'; else if(scope==='updates')where+=' AND s.update_available=1';
-  if(platform==='windows')where+=" AND COALESCE(s.platform_key,'windows')='windows'"; else if(platform==='android')where+=" AND s.platform_key='android'";
-  if(q){where+=' AND (s.name LIKE ? OR s.package_id LIKE ? OR s.publisher LIKE ? OR s.category LIKE ?)';for(let i=0;i<4;i++)params.push(`%${q}%`)}
-  const order=scope==='updates'
-    ? 's.update_available DESC,s.last_checked_at DESC,s.name'
-    : scope==='unpublished'
-      ? 'COALESCE(s.workspace_added_at,s.created_at) DESC,s.id DESC'
-      : scope==='published'
-        ? 'COALESCE(s.published_at,s.updated_at,s.created_at) DESC,s.id DESC'
-        : 'COALESCE(s.workspace_added_at,s.created_at) DESC,s.id DESC';
-  const [rows]=await db.query(`SELECT s.*,c.user_id AS work_claim_user_id,c.claimed_at AS work_claimed_at,c.last_heartbeat_at AS work_claim_heartbeat_at,
-    cu.name AS work_claim_user_name,cu.role AS work_claim_user_role
-    FROM software s LEFT JOIN software_work_claims c ON c.software_id=s.id LEFT JOIN users cu ON cu.id=c.user_id
-    WHERE ${where} ORDER BY ${order} LIMIT 50000`,params);
-  res.json({ok:true,results:rows.map(softwareJson)});
-}catch(e){next(e)}});
-
-router.get('/work-claims',async(req,res,next)=>{try{res.json({ok:true,claims:await workClaims.listActiveClaims(),timeoutSeconds:workClaims.LOCK_TIMEOUT_SECONDS})}catch(e){next(e)}});
-
-router.get('/software/:id', async(req,res,next)=>{try{
-  const db=getPool(); const r=await softwareRow(req.params.id);
-  if(!r)return res.status(404).json({ok:false,error:'Software not found.'});
-  if(String(r.source_type||'winget').toLowerCase()!=='liteapks') await backfillVersionDates(Number(r.id));
-  const [versionsRaw]=await db.query('SELECT * FROM software_versions WHERE software_id=?',[r.id]);
-  const versions=versionsRaw.sort((a,b)=>compareVersions(b.version,a.version)).filter(v=>String(v.version)!==String(r.current_version||'')).slice(0,5);
-  const [[queue]]=await db.query('SELECT status,last_error,updated_at FROM enrichment_queue WHERE software_id=? LIMIT 1',[r.id]);
-  await db.query('UPDATE software SET last_opened_at=NOW() WHERE id=?',[r.id]);
-  const out=softwareJson(r);
-  out.versions=versions.map(v=>({id:Number(v.id),version:v.version,installerUrl:v.installer_url,sourcePageUrl:v.source_page_url||null,updatedDate:dateOnly(v.release_date),updatedDateSource:v.release_date_source||null,architecture:v.architecture,installerType:v.installer_type,sha256:v.sha256}));
-  out.completeness=completeness(r,versions.length);
-  out.backgroundStatus=queue?.status||'idle';
-  const enrichedAt=r.enriched_at?new Date(r.enriched_at).getTime():0;
-  const stale=!enrichedAt || (Date.now()-enrichedAt)>(24*60*60*1000);
-  const isLiteApks=String(r.source_type||'winget').toLowerCase()==='liteapks';
-  const needsMetadataRevision=Number(r.metadata_revision||0)<(isLiteApks?7:4);
-  const missingRequired=isLiteApks?!r.source_page_url:!r.installer_url;
-  out.needsRefresh=Boolean(r.enrichment_status!=='ready'||!r.current_version||missingRequired||stale||needsMetadataRevision);
-  if(r.enrichment_status!=='ready'||!r.current_version||missingRequired||needsMetadataRevision) queueSoftware(Number(r.id)).catch(()=>{});
-  res.json({ok:true,software:out});
-}catch(e){next(e)}});
-
-router.post('/software/:id/claim',...mutate,async(req,res,next)=>{try{
-  const result=await workClaims.claimSoftware(Number(req.params.id),req.currentUser);
-  if(!result.ok)return lockedResponse(res,result.claim);
-  res.json({ok:true,claim:result.claim});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-router.post('/software/:id/heartbeat',...mutate,async(req,res,next)=>{try{
-  const result=await workClaims.heartbeat(Number(req.params.id),req.currentUser.id);
-  if(!result.ok){
-    if(result.claim)return lockedResponse(res,result.claim);
-    return res.status(409).json({ok:false,error:'Your work claim is no longer active.',claim:null});
-  }
-  res.json({ok:true,claim:result.claim});
-}catch(e){next(e)}});
-router.post('/software/:id/release',...mutate,async(req,res,next)=>{try{
-  const result=await workClaims.release(Number(req.params.id),req.currentUser,{force:req.currentUser.role==='admin'&&Boolean(req.body?.force)});
-  res.json({ok:true,...result});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-router.post('/software/:id/takeover',...mutate,requireAdmin,async(req,res,next)=>{try{
-  res.json(await workClaims.takeover(Number(req.params.id),req.currentUser));
-}catch(e){next(e)}});
-
-router.post('/software/:id/refresh',...mutate,async(req,res,next)=>{try{
-  const id=Number(req.params.id); await workClaims.ensureNotOwnedByOther(id,req.currentUser);
-  const [[s]]=await getPool().query('SELECT id FROM software WHERE id=? LIMIT 1',[id]);
-  if(!s)return res.status(404).json({ok:false,error:'Software not found.'});
-  await queueSoftware(id,{force:true});
-  res.json({ok:true,queued:true,message:'Software details refresh queued.'});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-router.post('/software/:id/prepare',...mutate,async(req,res,next)=>{try{
-  const id=Number(req.params.id); await workClaims.ensureNotOwnedByOther(id,req.currentUser); await queueSoftware(id,{force:true});
-  res.json({ok:true,queued:true,refreshed:false,warning:null});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-router.post('/software/:id/toggle-published',...mutate,async(req,res,next)=>{try{
-  const db=getPool();
-  let [[s]]=await db.query('SELECT * FROM software WHERE id=?',[req.params.id]);
-  if(!s)return res.status(404).json({ok:false,error:'Software not found.'});
-  const value=s.published?0:1;
-  if(value===1){
-    const claimResult=await workClaims.claimSoftware(Number(s.id),req.currentUser);
-    if(!claimResult.ok)return lockedResponse(res,claimResult.claim);
-  } else {
-    await workClaims.ensureNotOwnedByOther(Number(s.id),req.currentUser);
-  }
-  const liteSource=String(s.source_type||'winget').toLowerCase()==='liteapks';
-  const sourceReady=liteSource?Boolean(s.source_page_url):Boolean(s.installer_url);
-  if(value===1 && (!s.current_version || !sourceReady || s.enrichment_status!=='ready')){
-    const prep=await prepareSoftware(Number(s.id));
-    [[s]]=await db.query('SELECT * FROM software WHERE id=?',[s.id]);
-    const refreshedReady=String(s.source_type||'winget').toLowerCase()==='liteapks'?Boolean(s.source_page_url):Boolean(s.installer_url);
-    if(!s.current_version || !refreshedReady){
-      return res.status(409).json({ok:false,error:prep.warning || (liteSource?'A current version and LiteAPKs source page are required before publishing.':'Verified version and installer link are required before publishing. Open the software and retry details.')});
-    }
-  }
-  await db.query('UPDATE software SET published=?,published_at=IF(?=1,NOW(),NULL) WHERE id=?',[value,value,s.id]);
-  await db.query(`INSERT INTO software_import_history (package_id,status,last_imported_at)
-    VALUES (?,?,NOW()) ON DUPLICATE KEY UPDATE status=VALUES(status),updated_at=CURRENT_TIMESTAMP`,
-    [s.package_id,value===1?'published':'imported']);
-  await activity.record(req.currentUser.id,value===1?'software_published':'software_unpublished',{softwareId:Number(s.id)});
-  if(req.currentUser.role==='partner')await notifications.notifyAdmins({
-    actorUserId:req.currentUser.id,type:'info',title:value===1?'Software published':'Software moved back to New',
-    message:`${req.currentUser.name||'Partner'} ${value===1?'published':'unpublished'} ${s.name||s.package_id}.`,softwareId:Number(s.id)
-  },{exceptUserId:req.currentUser.id});
-  if(value===1)await workClaims.releaseOwned(Number(s.id),req.currentUser.id);
-  res.json({ok:true,published:Boolean(value)});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-router.get('/software/:id/android-assets/icon',async(req,res,next)=>{try{
-  const row=await softwareRow(Number(req.params.id));
-  if(!row)return res.status(404).json({ok:false,error:'APK not found.'});
-  if(String(row.platform_key||'').toLowerCase()!=='android'||String(row.source_type||'').toLowerCase()!=='liteapks')return res.status(400).json({ok:false,error:'Media downloads are available for Android APK records only.'});
-  const file=await androidMedia.iconDownload(row);
-  const inline=String(req.query.inline||'')==='1';
-  res.set('Content-Type',file.mime);
-  res.set('Content-Length',String(file.buffer.length));
-  res.set('Cache-Control',inline?'private, max-age=3600':'private, no-store');
-  res.set('Content-Disposition',`${inline?'inline':'attachment'}; filename="${file.filename.replace(/["\\]/g,'_')}"`);
-  res.send(file.buffer);
-}catch(e){if(e?.status)return res.status(e.status).json({ok:false,error:e.message});next(e)}});
-router.get('/software/:id/android-assets/screenshot/:index',async(req,res,next)=>{try{
-  const row=await softwareRow(Number(req.params.id));
-  if(!row)return res.status(404).json({ok:false,error:'APK not found.'});
-  if(String(row.platform_key||'').toLowerCase()!=='android'||String(row.source_type||'').toLowerCase()!=='liteapks')return res.status(400).json({ok:false,error:'Media downloads are available for Android APK records only.'});
-  const file=await androidMedia.screenshotDownload(row,Number(req.params.index));
-  const inline=String(req.query.inline||'')==='1';
-  res.set('Content-Type',file.mime);
-  res.set('Content-Length',String(file.buffer.length));
-  res.set('Cache-Control',inline?'private, max-age=3600':'private, no-store');
-  res.set('Content-Disposition',`${inline?'inline':'attachment'}; filename="${file.filename.replace(/["\\]/g,'_')}"`);
-  res.send(file.buffer);
-}catch(e){if(e?.status)return res.status(e.status).json({ok:false,error:e.message});next(e)}});
-router.get('/software/:id/android-assets.zip',async(req,res,next)=>{try{
-  const row=await softwareRow(Number(req.params.id));
-  if(!row)return res.status(404).json({ok:false,error:'APK not found.'});
-  if(String(row.platform_key||'').toLowerCase()!=='android'||String(row.source_type||'').toLowerCase()!=='liteapks')return res.status(400).json({ok:false,error:'Media downloads are available for Android APK records only.'});
-  const pack=await androidMedia.mediaPack(row);
-  res.set('Content-Type','application/zip');
-  res.set('Content-Length',String(pack.buffer.length));
-  res.set('Cache-Control','private, no-store');
-  res.set('Content-Disposition',`attachment; filename="${pack.filename.replace(/["\\]/g,'_')}"`);
-  res.send(pack.buffer);
-}catch(e){if(e?.status)return res.status(e.status).json({ok:false,error:e.message});next(e)}});
-
-router.post('/software/:id/android-download/resolve',...mutate,async(req,res,next)=>{try{
-  const id=Number(req.params.id);
-  const row=await softwareRow(id);
-  if(!row)return res.status(404).json({ok:false,error:'APK not found.'});
-  if(String(row.platform_key||'').toLowerCase()!=='android'||String(row.source_type||'').toLowerCase()!=='liteapks')return res.status(400).json({ok:false,error:'Download resolution is available for Android APK records only.'});
-  const out=await liteapks.resolveDownloadForSoftware(id);
-  res.json({ok:true,...out});
-}catch(e){if(e?.status)return res.status(e.status).json({ok:false,error:e.message});next(e)}});
-
-router.post('/software/:id/mark-updated',...mutate,async(req,res,next)=>{try{
-  const id=Number(req.params.id); await workClaims.ensureNotOwnedByOther(id,req.currentUser); await updates.markUpdated(id); await activity.record(req.currentUser.id,'software_marked_updated',{softwareId:id});
-  if(req.currentUser.role==='partner'){const [[sw]]=await getPool().query('SELECT name,package_id FROM software WHERE id=? LIMIT 1',[id]);await notifications.notifyAdmins({actorUserId:req.currentUser.id,type:'info',title:'Software updated',message:`${req.currentUser.name||'Partner'} marked ${sw?.name||sw?.package_id||'software'} updated.`,softwareId:id},{exceptUserId:req.currentUser.id});}
-  res.json({ok:true});
-}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
-
-router.get('/import/manual/search',async(req,res,next)=>{try{
-  const q=String(req.query.q||'').trim(); const source=String(req.query.source||'winget').toLowerCase();
-  const results=!q?[]:source==='liteapks'?await liteapks.searchCatalog(q):await imports.searchCandidates(q);
-  res.json({ok:true,results});
-}catch(e){next(e)}});
-router.post('/import/manual',...mutate,async(req,res,next)=>{try{
-  const sourceType=String(req.body.sourceType||'winget').toLowerCase();
-  let sw; let packageId=String(req.body.packageId||'').trim();
-  if(sourceType==='liteapks'){
-    let sourcePageUrl=String(req.body.sourcePageUrl||'').trim();
-    if(!sourcePageUrl && packageId.startsWith('liteapks:')){const [[cat]]=await getPool().query("SELECT source_page_url FROM catalog_packages WHERE package_id=? AND source_type='liteapks' LIMIT 1",[packageId]);sourcePageUrl=cat?.source_page_url||''}
-    if(!liteapks.normalizeSourceUrl(sourcePageUrl))return res.status(400).json({ok:false,error:'Enter or select a valid LiteAPKs app page URL.'});
-    sw=await liteapks.ensureManagedFromUrl(sourcePageUrl); packageId=sw.package_id;
-  }else{
-    if(!packageId||packageId.length>190)return res.status(400).json({ok:false,error:'Enter a valid WinGet Package ID.'});
-    sw=await imports.verifiedImport(packageId);
-  }
-  await activity.record(req.currentUser.id,'software_manual_imported',{softwareId:Number(sw.id),details:{packageId,sourceType}});
-  if(req.currentUser.role==='partner')await notifications.notifyAdmins({
-    actorUserId:req.currentUser.id,type:'info',title:'Software imported',message:`${req.currentUser.name||'Partner'} imported ${sw.name||packageId}.`,softwareId:Number(sw.id)
-  },{exceptUserId:req.currentUser.id});
-  res.json({ok:true,id:sw.id,verified:true,warning:null});
-}catch(e){next(e)}});
-
-router.get('/liteapks/state',async(req,res,next)=>{try{res.json({ok:true,state:await liteapks.getSyncState()})}catch(e){next(e)}});
-router.post('/liteapks/sync',...mutate,requireAdmin,async(req,res,next)=>{try{const mode=String(req.body?.mode||'auto');res.json({ok:true,state:await liteapks.startSync({mode,requestedBy:req.currentUser.id,force:Boolean(req.body?.force)})})}catch(e){next(e)}});
-router.post('/liteapks/step',...mutate,requireAdmin,async(req,res,next)=>{try{res.json({ok:true,state:await liteapks.step()})}catch(e){next(e)}});
-
-router.post('/import/auto/start',...mutate,async(req,res,next)=>{try{const job=await imports.startAutoImport(req.body.count,req.body.installerFormat,req.currentUser.id);await activity.record(req.currentUser.id,'auto_import_started',{details:{count:req.body.count,installerFormat:req.body.installerFormat}});res.json({ok:true,job})}catch(e){next(e)}});
-router.post('/import/auto/stop',...mutate,async(req,res,next)=>{try{const job=await imports.stopAutoImport();await activity.record(req.currentUser.id,'auto_import_stopped');res.json({ok:true,job})}catch(e){next(e)}});
-router.post('/import/auto/step',...mutate,async(req,res,next)=>{try{res.json({ok:true,job:await imports.stepAutoImport()})}catch(e){next(e)}});
-router.get('/import/auto/state',async(req,res,next)=>{try{res.json({ok:true,job:await imports.currentJob()})}catch(e){next(e)}});
-
-router.post('/workspace/clear-new',...mutate,requireAdmin,async(req,res,next)=>{try{const platform=String(req.body?.platform||'all').toLowerCase();const result=await maintenance.clearNewSoftware(platform);await activity.record(req.currentUser.id,'new_software_cleared',{details:{platform:result.platform}});res.json({ok:true,...result})}catch(e){next(e)}});
-router.post('/maintenance/reset-all',...mutate,requireAdmin,async(req,res,next)=>{try{
-  if(String(req.body.confirm||'')!=='RESET')return res.status(400).json({ok:false,error:'Type RESET to confirm.'});
-  await maintenance.resetAllData();
-  await activity.record(req.currentUser.id,'software_data_reset');
-  res.json({ok:true,cleared:true});
-}catch(e){next(e)}});
-
-router.post('/updates/start',...mutate,async(req,res,next)=>{try{const platform=String(req.body?.platform||'all').toLowerCase();res.json({ok:true,state:await updates.start(req.currentUser.id,platform)})}catch(e){next(e)}});
-router.post('/updates/step',...mutate,async(req,res,next)=>{try{const platform=String(req.body?.platform||'all').toLowerCase();res.json({ok:true,state:await updates.step(platform)})}catch(e){next(e)}});
-router.get('/updates/state',async(req,res,next)=>{try{const platform=String(req.query.platform||'all').toLowerCase();res.json({ok:true,state:await updates.state(platform)})}catch(e){next(e)}});
+router.post('/apps/:id/claim',...mutate,async(req,res,next)=>{try{const out=await claims.claimApp(req.params.id,req.currentUser);if(!out.ok)return lockedResponse(res,out.claim);res.json({ok:true,claim:out.claim})}catch(e){next(e)}});
+router.post('/apps/:id/heartbeat',...mutate,async(req,res,next)=>{try{const out=await claims.heartbeat(req.params.id,req.currentUser.id);if(!out.ok)return res.status(out.claim?423:409).json({ok:false,error:out.claim?`${out.claim.name} is working on this app.`:'Your app lock is no longer active.',claim:out.claim||null});res.json({ok:true,claim:out.claim})}catch(e){next(e)}});
+router.post('/apps/:id/release',...mutate,async(req,res,next)=>{try{res.json({ok:true,...await claims.release(req.params.id,req.currentUser,{force:Boolean(req.body?.force)})})}catch(e){if(e.status===423)return lockedResponse(res,e.claim);next(e)}});
+router.post('/apps/:id/takeover',...mutate,requireAdmin,async(req,res,next)=>{try{res.json(await claims.takeover(req.params.id,req.currentUser))}catch(e){next(e)}});
+router.get('/claims',async(req,res,next)=>{try{res.json({ok:true,claims:await claims.listActiveClaims()})}catch(e){next(e)}});
 
 router.get('/users',requireAdmin,async(req,res,next)=>{try{res.json({ok:true,users:await users.listUsers()})}catch(e){next(e)}});
-router.post('/users',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const user=await users.createPartner({name:req.body.name,email:req.body.email,password:req.body.password,createdBy:req.currentUser.id});
-  await activity.record(req.currentUser.id,'partner_created',{targetUserId:user.id});
-  await notifications.notifyUser(user.id,{actorUserId:req.currentUser.id,type:'info',title:'Welcome to HSWare',message:'Your Partner account is ready. You can import, review, publish, and update software.'});
-  res.status(201).json({ok:true,user});
-}catch(e){next(e)}});
-router.patch('/users/:id',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const user=await users.updatePartner(Number(req.params.id),{name:req.body.name,email:req.body.email,password:req.body.password});
-  await activity.record(req.currentUser.id,'partner_updated',{targetUserId:user.id});
-  await notifications.notifyUser(user.id,{actorUserId:req.currentUser.id,type:'info',title:'Account updated',message:'The Admin updated your HSWare Partner account details.'});
-  res.json({ok:true,user});
-}catch(e){next(e)}});
-router.post('/users/:id/status',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const active=Boolean(req.body.active); const user=await users.setPartnerActive(Number(req.params.id),active);
-  await activity.record(req.currentUser.id,active?'partner_enabled':'partner_disabled',{targetUserId:user.id});
-  if(active)await notifications.notifyUser(user.id,{actorUserId:req.currentUser.id,type:'success',title:'Account enabled',message:'Your HSWare Partner account has been enabled.'});
-  res.json({ok:true,user});
-}catch(e){next(e)}});
-router.patch('/account',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const user=await users.updateOwnAdmin(req.currentUser.id,{name:req.body.name,email:req.body.email,password:req.body.password});
-  req.session.user={id:user.id,name:user.name,email:user.email,role:user.role};
-  await activity.record(req.currentUser.id,'admin_profile_updated');
-  res.json({ok:true,user});
-}catch(e){next(e)}});
-router.get('/users/:id/avatar',async(req,res,next)=>{try{
-  const image=await users.avatar(Number(req.params.id));
-  if(!image)return res.status(404).end();
-  res.set('Content-Type',image.mime); res.set('Cache-Control','private, max-age=3600'); res.send(image.buffer);
-}catch(e){next(e)}});
-router.put('/users/:id/avatar',express.raw({type:['image/jpeg','image/png','image/webp'],limit:'2mb'}),...mutate,requireAdmin,async(req,res,next)=>{try{
-  const target=await users.getUserById(Number(req.params.id));
-  if(!target)return res.status(404).json({ok:false,error:'User not found.'});
-  const user=await users.setAvatar(target.id,req.body,req.get('content-type'));
-  await activity.record(req.currentUser.id,'profile_photo_updated',{targetUserId:user.id});
-  res.json({ok:true,user});
-}catch(e){next(e)}});
-router.delete('/users/:id/avatar',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const target=await users.getUserById(Number(req.params.id));
-  if(!target)return res.status(404).json({ok:false,error:'User not found.'});
-  const user=await users.removeAvatar(target.id); await activity.record(req.currentUser.id,'profile_photo_removed',{targetUserId:user.id}); res.json({ok:true,user});
-}catch(e){next(e)}});
+router.get('/users/:id/avatar',async(req,res,next)=>{try{const out=await users.avatar(req.params.id);if(!out)return res.status(404).end();res.type(out.mime).send(out.buffer)}catch(e){next(e)}});
+router.post('/users/partner',...mutate,requireAdmin,async(req,res,next)=>{try{const u=await users.createPartner({name:req.body?.name,email:req.body?.email,password:req.body?.password,createdBy:req.currentUser.id});await activity.record(req.currentUser.id,'partner_created',{targetUserId:u.id});res.json({ok:true,user:u})}catch(e){next(e)}});
+router.post('/users/:id',...mutate,requireAdmin,async(req,res,next)=>{try{const id=Number(req.params.id);const target=id===Number(req.currentUser.id)?await users.updateOwnAdmin(id,req.body||{}):await users.updatePartner(id,req.body||{});await activity.record(req.currentUser.id,id===Number(req.currentUser.id)?'admin_profile_updated':'partner_updated',{targetUserId:id});res.json({ok:true,user:target})}catch(e){next(e)}});
+router.post('/users/:id/status',...mutate,requireAdmin,async(req,res,next)=>{try{const active=Boolean(req.body?.active),u=await users.setPartnerActive(req.params.id,active);await activity.record(req.currentUser.id,active?'partner_enabled':'partner_disabled',{targetUserId:u.id});res.json({ok:true,user:u})}catch(e){next(e)}});
+router.post('/users/:id/avatar',express.raw({type:['image/jpeg','image/png','image/webp'],limit:'2mb'}),...mutate,async(req,res,next)=>{try{const id=Number(req.params.id);if(id!==Number(req.currentUser.id)&&req.currentUser.role!=='admin')return res.status(403).json({ok:false,error:'You can only update your own profile photo.'});const u=await users.setAvatar(id,req.body,req.headers['content-type']);await activity.record(req.currentUser.id,'profile_photo_updated',{targetUserId:id});res.json({ok:true,user:u})}catch(e){next(e)}});
+router.delete('/users/:id/avatar',...mutate,async(req,res,next)=>{try{const id=Number(req.params.id);if(id!==Number(req.currentUser.id)&&req.currentUser.role!=='admin')return res.status(403).json({ok:false,error:'You can only remove your own profile photo.'});const u=await users.removeAvatar(id);await activity.record(req.currentUser.id,'profile_photo_removed',{targetUserId:id});res.json({ok:true,user:u})}catch(e){next(e)}});
 
-router.get('/health',requireAdmin,async(req,res)=>{const checks=[
- {name:'Node.js',status:'pass',detail:process.version},
- {name:'Database environment',status:hasDbConfig()?'pass':'fail',detail:hasDbConfig()?'Configured':'Missing DB environment variables'},
- {name:'Database connection',status:state.dbReady?'pass':'fail',detail:state.dbReady?'Connected':(state.dbError||'Not connected')},
- {name:'Schema',status:state.schemaVersion>=20?'pass':'fail',detail:`Schema version ${state.schemaVersion||0}`},
- {name:'Frontend framework',status:'pass',detail:'Astro 7 + Express + separated Desktop Software (WinGet) and Android APK (LiteAPKs) workspaces'},
- {name:'User roles',status:'pass',detail:'Admin + Partner with database-enforced access controls'},
- {name:'Admin account',status:state.adminReady?'pass':'fail',detail:state.adminReady?'Ready':'Not initialized'},
- {name:'GitHub API token',status:hasToken()?'pass':'recommend',detail:hasToken()?'Configured':'Recommended for large WinGet discovery, old-version history and Windows update scans. LiteAPKs Android sync does not use GitHub.'}
-];res.json({ok:true,checks})});
 router.get('/backups/state',requireAdmin,async(req,res,next)=>{try{res.json({ok:true,backup:await backups.state()})}catch(e){next(e)}});
-router.post('/backups/create',...mutate,requireAdmin,async(req,res,next)=>{try{
-  const backup=await backups.createBackup('manual'); await activity.record(req.currentUser.id,'backup_created',{details:{kind:'manual',filename:backup.filename,fileSizeBytes:backup.fileSizeBytes}});
-  await notifications.notifyUser(req.currentUser.id,{actorUserId:req.currentUser.id,type:'success',title:'Backup completed',message:`${backup.filename} is ready to download.`,dedupeKey:`manual-backup-${backup.id}`});
-  res.json({ok:true,backup,state:await backups.state()});
-}catch(e){next(e)}});
-router.get('/backups/:id/download',requireAdmin,async(req,res,next)=>{try{
-  const item=await backups.getBackupFile(Number(req.params.id));
-  if(!item)return res.status(404).json({ok:false,error:'Backup file not found.'});
-  await backups.markDownloaded(Number(req.params.id));
-  res.download(item.filepath,item.filename);
-}catch(e){next(e)}});
-router.post('/backups/restore',express.raw({type:'application/octet-stream',limit:'100mb'}),...mutate,requireAdmin,async(req,res,next)=>{try{
-  if(!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({ok:false,error:'Choose an HSWare JSON backup file first.'});
-  let payload; try{payload=JSON.parse(req.body.toString('utf8'))}catch{return res.status(400).json({ok:false,error:'The selected file is not valid JSON.'})}
-  const restored=await backups.restoreBackup(payload); await activity.record(req.currentUser.id,'backup_restored');
-  await notifications.notifyUser(req.currentUser.id,{actorUserId:req.currentUser.id,type:'success',title:'Backup restored',message:'The HSWare workspace backup was restored successfully.'});
-  res.json({ok:true,...restored,counts:await counts(),backup:await backups.state()});
-}catch(e){next(e)}});
-
-router.post('/logout',...mutate,async(req,res)=>{const userId=req.currentUser?.id;if(userId)await workClaims.releaseAllOwned(userId);req.session=null;if(userId)await activity.record(userId,'user_logout');res.json({ok:true})});
-
+router.post('/backups/create',...mutate,requireAdmin,async(req,res,next)=>{try{const b=await backups.createBackup('manual');await activity.record(req.currentUser.id,'backup_created',{details:{kind:'manual',filename:b.filename}});res.json({ok:true,backup:b,state:await backups.state()})}catch(e){next(e)}});
+router.get('/backups/:id/download',requireAdmin,async(req,res,next)=>{try{const f=await backups.getBackupFile(req.params.id);if(!f)return res.status(404).send('Backup not found.');await backups.markDownloaded(req.params.id);res.download(f.filepath,f.filename)}catch(e){next(e)}});
+router.post('/backups/restore',express.raw({type:'application/octet-stream',limit:'50mb'}),...mutate,requireAdmin,async(req,res,next)=>{try{let payload;try{payload=JSON.parse(Buffer.isBuffer(req.body)?req.body.toString('utf8'):String(req.body||''))}catch{throw Object.assign(new Error('Backup JSON is invalid.'),{status:400})}const out=await backups.restoreBackup(payload);await activity.record(req.currentUser.id,'backup_restored',{details:{restoredApps:out.restoredApps}});res.json({ok:true,...out})}catch(e){next(e)}});
+router.post('/maintenance/clear-drafts',...mutate,requireAdmin,async(req,res,next)=>{try{const out=await maintenance.clearDraftApps();await activity.record(req.currentUser.id,'new_apps_cleared',{details:out});res.json({ok:true,...out,counts:await counts()})}catch(e){next(e)}});
+router.post('/maintenance/reset',...mutate,requireAdmin,async(req,res,next)=>{try{await maintenance.resetAllData();await activity.record(req.currentUser.id,'app_data_reset');res.json({ok:true,counts:await counts()})}catch(e){next(e)}});
+router.get('/health',requireAdmin,async(req,res,next)=>{try{const checks=[{name:'Runtime',status:'pass',detail:`Node ${process.version}`},{name:'Database',status:hasDbConfig()&&state.dbReady?'pass':'fail',detail:state.dbReady?'Connected':state.dbError||'Not configured'},{name:'Schema',status:state.schemaVersion>=120?'pass':'fail',detail:`Appbit schema ${state.schemaVersion||0}`},{name:'APK Resolver',status:'pass',detail:'Android APK resolver and publishing workspace only'},{name:'Theme',status:'pass',detail:'Dark-only Appbit interface'}];res.json({ok:true,checks})}catch(e){next(e)}});
 module.exports=router;

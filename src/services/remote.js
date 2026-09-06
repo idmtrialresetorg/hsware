@@ -27,7 +27,7 @@ async function safeFetch(input, { maxBytes = 4 * 1024 * 1024, accept = '*/*', re
     const response = await fetch(current, {
       redirect: 'manual',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; HSWareStudio/4.6.0; +https://example.invalid)',
+        'User-Agent': 'Mozilla/5.0 (compatible; Appbit/1.0; +https://example.invalid)',
         'Accept': accept,
         'Accept-Language': 'en-US,en;q=0.8'
       },
@@ -77,7 +77,7 @@ async function probeRemoteFileSize(input, redirects = 4) {
     const response = await fetch(current, {
       method: 'HEAD',
       redirect: 'manual',
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HSWareStudio/4.6.0)', 'Accept': '*/*' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Appbit/1.0)', 'Accept': '*/*' },
       signal: AbortSignal.timeout(10000)
     });
     if ([301,302,303,307,308].includes(response.status)) {

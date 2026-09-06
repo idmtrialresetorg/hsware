@@ -16,7 +16,7 @@ if (!fs.existsSync(path.join(dist, 'server', 'entry.mjs'))) {
   throw new Error('Astro server entry was not generated at dist/server/entry.mjs');
 }
 
-for (const dir of ['src', 'views', 'data']) copyDir(dir);
+for (const dir of ['src', 'views']) copyDir(dir);
 fs.copyFileSync(path.join(root, 'run-server.mjs'), path.join(dist, 'run-server.mjs'));
 fs.writeFileSync(path.join(dist, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2) + '\n');
-console.log('[HSWare] Hostinger runtime prepared in dist/. Entry file: run-server.mjs');
+console.log('[Appbit] Production runtime prepared in dist/. Entry file: run-server.mjs');

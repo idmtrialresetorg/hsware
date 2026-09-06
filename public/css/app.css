@@ -1,16 +1,16 @@
+
 :root{
-  --primary:#0052ff;--primary-active:#003ecc;
-  --canvas:#ffffff;--surface:#ffffff;--surface-soft:#f7f7f7;--surface-strong:#eef0f3;
-  --hairline:#dee1e6;
-  --ink:#0a0b0d;--body:#5b616e;--muted:#7c828a;
-  --up:#05b169;--down:#cf202f;--down-soft:rgba(207,32,47,.1);
-  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:24px;--r-pill:100px;--r-full:9999px;
-  --font-body:"Inter",-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --font-mono:"JetBrains Mono",ui-monospace,monospace;
-  --shadow-modal:0 24px 64px rgba(10,11,13,.14);
+  --primary:#0066cc;--primary-active:#0071e3;
+  --canvas:#000000;--surface:#1d1d1f;--surface-soft:#000000;--surface-strong:#2a2a2c;
+  --hairline:#3a3a3c;--ink:#ffffff;--body:#e5e5e7;--muted:#a1a1a6;
+  --up:#30d158;--down:#ff453a;--down-soft:rgba(255,69,58,.12);
+  --r-sm:8px;--r-md:11px;--r-lg:18px;--r-xl:24px;--r-pill:9999px;--r-full:9999px;
+  --font-body:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;--shadow-modal:0 24px 64px rgba(0,0,0,.55);
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;font-family:var(--font-body);color:var(--ink);background:var(--surface-soft)}
+html,body{margin:0;min-height:100%;font-family:var(--font-body);color:var(--ink);background:#000}
 body{font-size:14.5px;line-height:1.55}
 a{color:inherit}
 button,input{font:inherit}
@@ -50,3 +50,7 @@ code{background:var(--surface-strong);padding:2px 5px;border-radius:4px;font-fam
 .panel h2{margin:0 0 8px;font-size:19px}
 .panel p{margin:0 0 18px;color:var(--muted)}
 .btn-secondary{background:var(--surface-strong)}
+.brand-logo-img{width:42px;height:42px;object-fit:contain;display:block}
+.brand-logo-img.large{width:56px;height:56px;margin-bottom:18px}
+
+.login-card,.standalone-card,.health-card{box-shadow:none;background:#1d1d1f}.brand-logo-img{width:110px;height:70px;border-radius:0}.brand-logo-img.large{width:132px;height:84px}.login-brand{display:block}.login-brand>div{display:none}.stack-form input{background:#000;color:#fff}.btn:active{transform:scale(.95)}

@@ -136,7 +136,7 @@ async function setPartnerActive(id, active) {
   if (!existing) throw Object.assign(new Error('User not found.'), { status: 404 });
   if (existing.role !== 'partner') throw Object.assign(new Error('The administrator account cannot be disabled.'), { status: 403 });
   await db.query('UPDATE users SET is_active=? WHERE id=?', [active ? 1 : 0, Number(id)]);
-  if (!active) await db.query('DELETE FROM software_work_claims WHERE user_id=?', [Number(id)]);
+  if (!active) await db.query('DELETE FROM app_work_claims WHERE user_id=?', [Number(id)]);
   return publicUser(await getUserById(id));
 }
 

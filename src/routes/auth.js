@@ -6,7 +6,7 @@ const state = require('../state');
 const { guestOnly, requireAuth } = require('../middleware/auth');
 const { verifyToken } = require('../middleware/csrf');
 const activity = require('../services/activity');
-const workClaims = require('../services/work-claims');
+const workClaims = require('../services/app-claims');
 
 const router = express.Router();
 const loginLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
