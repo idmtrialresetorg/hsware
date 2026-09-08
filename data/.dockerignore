@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+backups
+*.log
+.env
+.env.*
+Dockerfile*
+docker-compose.override.yml
+*.zip
+.DS_Store
+.vscode
+.idea

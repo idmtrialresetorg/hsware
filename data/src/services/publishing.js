@@ -1,0 +1,4 @@
+const { getPool }=require('../db');
+const activity=require('./activity');
+async function setPublished(appId,published,userId){const db=getPool();const [[app]]=await db.query('SELECT id,published FROM apps WHERE id=? LIMIT 1',[Number(appId)]);if(!app)throw Object.assign(new Error('App not found.'),{status:404});await db.query('UPDATE apps SET published=?,published_at=IF(?,COALESCE(published_at,NOW()),NULL) WHERE id=?',[published?1:0,published?1:0,Number(appId)]);await db.query(`INSERT INTO publish_queue (app_id,status,requested_by) VALUES (?,?,?) ON DUPLICATE KEY UPDATE status=VALUES(status),requested_by=VALUES(requested_by),updated_at=NOW()`,[Number(appId),published?'published':'ready',userId?Number(userId):null]);await activity.record(userId,published?'app_published':'app_unpublished',{appId:Number(appId)});return true}
+module.exports={setPublished};
