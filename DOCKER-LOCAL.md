@@ -145,3 +145,9 @@ Keep your existing `appbit` Stack, Local server, GitHub repository, environment 
 This release does not require a new hosting framework, another Linux VM, another database, or a new Komodo stack. The installed Dockerfile still performs a fresh npm install, source check and Astro build. The existing source package version remains unchanged.
 
 Security: credentials previously shared in chat should be treated as exposed. Rotate the Appbit admin password, session secret, and database credentials. Changing an existing MySQL volume's environment password alone does not rotate the database user's stored password; rotate that user through MySQL administration and then update the matching environment values. Do not commit `.env.docker`, `.env`, tokens, passwords, database dumps or backup files to a public GitHub repository.
+
+## Updating the existing Komodo stack
+
+Create and download an Appbit database backup first. Replace the repository files with the contents of this ZIP (not a nested folder), commit to the existing branch, then use the existing Komodo Stack's Deploy action. Keep the existing Compose settings, environment values and named volumes. Do not run Destroy or `docker compose down -v`. After deployment, confirm `/apps/<name>-<id>` loads directly and the new record toolbar is visible. A failed build should be inspected in Komodo's deployment log; do not assume a source-check pass proves a production build.
+
+The previous public-chat secrets should be rotated in Komodo's private environment settings. Never commit `.env.docker`, backups, passwords or tokens.

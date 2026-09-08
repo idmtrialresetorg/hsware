@@ -21,7 +21,6 @@ Appbit intentionally supports Android APK workflows only. Its runtime is organiz
 ## Core services
 
 - `src/services/apk-resolver.js` — discovers and refreshes Android app metadata from the configured public APK source.
-- `src/services/apk-download-resolver.js` — resolves the final APK download target when requested.
 - `src/services/apk-media.js` — handles app icons, screenshots, and media downloads.
 - `src/services/apk-updates.js` — checks managed APK records for newer versions.
 - `src/services/publishing.js` — manages publishing state and queue entries.
@@ -89,3 +88,11 @@ Appbit now ships with a dark-only workspace. The light-mode toggle and light UI 
 The App Library contains routed app/Add pages, per-app media refresh, saved category navigation, and manual source-batch controls. Existing source metadata remains internal for resolution; the official-link UI shows only verified Play Store links. The source fetcher pauses on access restrictions and does not guarantee that an unavailable source can be accessed.
 
 The product version remains1.2.3 pending a live deployment acceptance test. See TEST-REPORT.md and CHANGE-MANIFEST.json before redeployment.
+
+## Application detail correction (1.2.3)
+
+App records open at `/apps/<readable-name>-<id>`, for example `/apps/binance-7`. The ID suffix is the permanent database key and avoids collisions without a schema migration. The old numeric URL remains supported. Detail pages show cover, metadata, Google Play link, media, description, screenshots, and prior versions. Copy All excludes the source page and file URLs. Final APK download resolution has been removed from the API and UI.
+
+Refresh, Logo Refresh, Screenshot Refresh and Refresh Cover operate on the selected app. Saved artwork is retained if the source reports no replacement. Source-returned URLs are not a guarantee that the external image host is accessible; errors are reported rather than bypassed.
+
+The full Docker/Astro/Express structure is preserved. The current product version remains 1.2.3. See TEST-REPORT.md and CHANGE-MANIFEST.json before deployment.

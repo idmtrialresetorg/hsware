@@ -58,7 +58,7 @@ function fakePool(){
 }
 function resolverHarness(pool,hook=''){
  const state={dbReady:true};
- const stubs={'../db':{getPool:()=>pool},'../state':state,'../config':{apkResolverMaxItems:50000,apkResolverRequestGapMs:700},'./activity':{record:async()=>{}},'./notifications':{notifyUser:async()=>{}},'./apk-download-resolver':{resolveFinalDownloadUrl:async()=>null},'../utils/version':{compareVersions:(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})},'./apk-source':require('../src/services/apk-source'),'cheerio':{load:()=>({})}};
+ const stubs={'../db':{getPool:()=>pool},'../state':state,'../config':{apkResolverMaxItems:50000,apkResolverRequestGapMs:700},'./activity':{record:async()=>{}},'./notifications':{notifyUser:async()=>{}},'../utils/version':{compareVersions:(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})},'./apk-source':require('../src/services/apk-source'),'cheerio':{load:()=>({})}};
  return loadModule('src/services/apk-resolver.js',stubs,hook);
 }
 const flush=()=>new Promise(r=>setTimeout(r,0));

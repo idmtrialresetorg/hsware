@@ -1,26 +1,27 @@
-# Appbit — UI and Manual Import Hotfix: Verification
+# Verification report — Appbit detail-page correction
 
-Release identity: existing VERSION 1.2.3 retained. The database migration number is 123 and is not the product version.
+Product version: 1.2.3 (unchanged). Base: user's Appbit-v1.2.3-Docker-Local-Ready(1).zip, with the earlier UI/import hotfix corrections applied and then rewritten as described in CHANGELOG.md.
 
-## Completed checks
+## Passed
 
-- 13 focused Node tests passed (7 backend/source/data tests and 6 UI DOM-interaction tests).
-- `node scripts/check-files.js` passed: JavaScript syntax and relative module-resolution checks.
-- New source and update worker modules pass `node --check`.
-- Source and packaged backend/frontend copies are synchronized; see CHANGE-MANIFEST.json.
-- Original deployment/framework files are hash-identical to the uploaded base; see CHANGE-MANIFEST.json.
-- ZIP CRC integrity verified.
+- `npm run check`: JavaScript syntax and local module resolution.
+- 18 Node tests: 7 source/worker/data tests, 6 UI interaction tests, 5 new slug/API/runtime-route tests.
+- The new route tests exercise the actual packaged server-entry handler, including direct slug paths and the legacy numeric path.
+- The API tests confirm the slug resolves an existing record, the removed final-download route is not registered, old direct-file URLs are not exposed by the detail DTO, and selected media kinds reach the correct app service.
+- The existing media transaction test verifies rollback and preservation of old artwork on failure. The browserless UI tests verify routing, 20-record pagination, manual Add APK and Stop, and one-app media refresh requests.
+- Source/runtime copy parity, protected deployment-file hash comparison, static route checks, and ZIP CRC integrity.
 
-## Not completed / not claimed
+## Not passed / not performed
 
-- Fresh npm dependency installation and Astro compiler build: the execution environment could not reach the npm registry.
-- Live MySQL migration, existing 1,853-record count, or live import against your database: no access to your local Docker/MySQL instance.
-- End-to-end Docker/Komodo startup or GitHub deployment: no access to your local engine/repository write session.
-- Real LiteAPKs category completeness or successful HTTP403 access: source access is unavailable/restricted. The importer now reports and pauses on restrictions rather than claiming to bypass them.
-- Browser pixel/layout validation: attempted, but managed Chromium policy blocked local and synthetic navigation. CSS changes are included but their visual result must be checked on your PC.
+- npm dependency installation timed out. A fresh Astro compiler build has not been completed in this environment.
+- Real Chromium was attempted against a local deterministic API server, but localhost navigation returned ERR_BLOCKED_BY_ADMINISTRATOR. No pixel-perfect or actual-browser success is claimed. The attempted harness is included in tests/browser-smoke.py.
+- No access to the user's Komodo/Docker engine, live MySQL, GitHub write session, or working LiteAPKs session. Live deployment, actual app count, image download availability, category completeness, and a successful source import are not verified here.
+- The test suite uses controlled fixtures and does not establish live database compatibility or production readiness.
 
-## Deployment acceptance checklist
+## Local acceptance
 
-Before changing the live stack, create and download an Appbit backup and keep a copy outside Docker. In Komodo, redeploy the same stack after updating the GitHub repository. Do not destroy the stack or remove volumes. After startup, verify the database health/schema, direct `/apps/7` routing with a real app ID, category page counts, description copy, one-app media refresh, manual import5 with Stop, and a deliberately small source request. A403 should pause with an explanatory message; it is not a successful import.
-
-Do not promote this candidate to a new version until these live acceptance checks pass.
+1. Back up the database and keep the backup outside the stack. Redeploy the same GitHub/Komodo stack without deleting volumes.
+2. Open a real app and confirm the full page has a readable URL, no modal overlay, and the requested header/cover/metadata/link/description order. Refresh that URL and use browser Back.
+3. Check the Play Store link, Copy All and Copy Description, and verify there is no final-APK resolution button or endpoint.
+4. Test Logo Refresh, Cover Refresh, and Screenshot Refresh on one existing app. A source failure must retain its previous artwork and report an error. A source-returned URL must not be mistaken for a downloaded asset.
+5. Check the same page on desktop/mobile and review the actual runtime logs. Only promote a new product version after the deployment and these checks pass.

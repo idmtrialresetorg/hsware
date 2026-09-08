@@ -1,3 +1,27 @@
+# Appbit 1.2.3 — Detail Page Correction
+
+This corrects the earlier incomplete UI hotfix. It is not a new product-version release. The original uploaded Docker/Astro/Express deployment is retained.
+
+## Application detail
+
+- Native, full-page app workspace at a readable canonical route such as `/apps/binance-7`. The numeric suffix is the permanent database ID, so duplicate names cannot collide. Existing numeric URLs still work and resolve to the canonical route. The API supplies `slug` and `url` from existing data; no destructive database rewrite is needed.
+- App Library cards use ordinary links, supporting browser history, direct links, refresh, and opening in another tab. Add APK remains a routed form, not a modal.
+- Rebuilt detail markup and a dedicated `.record-*` CSS layout: header with icon/name/version/status/actions, cover, metadata, official links, media, description, screenshots, and previous versions. The design uses the supplied reference's compact dark cards, restrained borders, and blue actions without copying its desktop-only modules.
+- Removed the four Readiness/Version/Type/Updated summary boxes. The update date is within metadata. Current version appears once in metadata, and the current release is excluded from Previous Versions.
+- Header actions: Copy All, Publish/Unpublish, Refresh, Logo Refresh, Screenshot Refresh, Back. Cover and gallery also have individual refresh actions. Description has a copy button.
+- Only a verified Google Play Store URL is presented as the official store link. The source-page link is not displayed or included in Copy All.
+- Removed final APK download UI, its API endpoint, browser resolver module, and unused final-file parser. No new direct-download URL is resolved during metadata import. Existing historical records and release-page metadata are retained; the Docker dependency configuration is deliberately not changed in this UI correction.
+- Individual media refresh accepts selected artwork kinds. It updates only the requested types transactionally, preserves unavailable existing artwork, and rejects concurrent refreshes on the same app. The response distinguishes source-returned metadata from retained artwork; no new image is falsely reported as downloaded.
+- Prevents a completed asynchronous refresh from replacing a different page after the user navigates away.
+
+## Preserved from the earlier hotfix
+
+The Android-only database, category hierarchy and saved fetch state, 20-record server-side pagination, manual import and Stop, HTTP403 pause behavior, Update Center, publishing, backup system, and existing authentication are retained. This correction does not claim to have re-fetched your live category catalog or repaired source-side access restrictions.
+
+## Deployment
+
+The existing Dockerfile, Compose file, environment template, root server entry, Astro configuration, Node/Astro/Express dependencies, and production launcher remain unchanged. The only package.json change removes the deleted resolver file from the `npm run check` command. Source and packaged runtime copies are synchronized. The existing product VERSION remains 1.2.3.
+
 # Changelog
 
 ## 1.1.0 — Dark workspace and manual resolver controls

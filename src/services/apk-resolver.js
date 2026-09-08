@@ -1,4 +1,3 @@
-const { resolveFinalDownloadUrl } = require('./apk-download-resolver');
 const cheerio = require('cheerio');
 const state = require('../state');
 const config = require('../config');
@@ -337,42 +336,6 @@ function downloadPageUrl($, pageUrl) {
   return candidates[0]?.url || null;
 }
 
-function parseDownloadLanding(html, pageUrl) {
-  const $ = cheerio.load(String(html || ''));
-  const labels = labelMap($);
-  const pageText = cleanText($('body').text());
-  const title = cleanText(metadataContent($,['meta[property="og:title"]','meta[name="twitter:title"]','h1','title']));
-  const version = normalizeVersion(firstLabel(labels,['version','latest version','current version']) || (title.match(/\bv?([0-9]+(?:\.[0-9A-Za-z_-]+){1,})\b/)||[])[1] || (pageText.match(/\bVersion\s*[:：]?\s*v?([0-9][0-9A-Za-z._+-]{0,40})/i)||[])[1]);
-  const sizeText = cleanText(firstLabel(labels,['size','file size','apk size']) || (pageText.match(/\b([0-9]+(?:\.[0-9]+)?\s*(?:KB|MB|GB|TB))\b/i)||[])[1]);
-  const apkFormat = /\bXAPK\b/i.test(pageText) ? 'XAPK' : /\bAPKS\b/i.test(pageText) ? 'APKS' : 'APK';
-  return {
-    pageUrl: normalizeSourceUrl(pageUrl),
-    version,
-    sizeText: sizeText || null,
-    fileSizeBytes: parseBytes(sizeText),
-    apkFormat
-  };
-}
-
-async function directPublicFileUrl($, app, pageUrl) {
-  // Resolve publicly exposed APK-family URLs from the app/download pages.
-  // This intentionally does not bypass ads, timers, tokens, or anti-bot protection.
-  const candidates=[];
-  const add=value=>{ if(value)candidates.push(value); };
-  add(app?.contentUrl); add(app?.downloadUrl);
-  if(Array.isArray(app?.distribution))app.distribution.forEach(v=>add(typeof v==='string'?v:v?.contentUrl||v?.url));
-  $('a[href]').each((_,el)=>{
-    const href=$(el).attr('href');
-    if(/\.(?:apk|xapk|apks)(?:$|[?#])/i.test(String(href||'')))add(href);
-  });
-  for(const value of candidates){
-    const url=normalizeMetadataUrl(value,pageUrl);
-    if(!url)continue;
-    try{if(/\.(?:apk|xapk|apks)$/i.test(new URL(url).pathname))return url}catch{}
-  }
-  return null;
-}
-
 function apkTypeLabel({ title, modInfo, price, labels, pageText }) {
   const labelText=cleanText(firstLabel(labels,['mod info','mod features','features','type','apk type','mod'])||'');
   const text=[title,modInfo,labelText,pageText.slice(0,5000)].filter(Boolean).join(' | ');
@@ -436,7 +399,6 @@ async function parseAppPage(html, pageUrl) {
   const officialUrl=externalWebsite($,labels,app,sourcePageUrl);
   const playStore=playStoreUrl($,app,labels,sourcePackageId,sourcePageUrl);
   const downloadPage=downloadPageUrl($,sourcePageUrl);
-  const directDownload=directPublicFileUrl($,app,sourcePageUrl);
   const apkType=apkTypeLabel({title,modInfo,price,labels,pageText});
   const licenseName=cleanText(firstLabel(labels,['license','licence'])) || null;
   const language=cleanText(firstLabel(labels,['language','languages'])) || null;
@@ -488,7 +450,6 @@ async function parseAppPage(html, pageUrl) {
     apkType,
     playStoreUrl:playStore,
     downloadPageUrl:downloadPage,
-    directDownloadUrl:directDownload,
     tags,
     oldVersions:extractHistoricalVersions($),
     metadata:{
@@ -497,7 +458,7 @@ async function parseAppPage(html, pageUrl) {
       architecture:architecture||null,apkFormat,modInfo:modInfo||null,apkType,price:price||null,ratingValue,ratingCount,
       sourceSection:categoryInfo.section,category:categoryInfo.name,categorySlug:categoryInfo.slug,categoryUrl:categoryInfo.url,breadcrumbs:categoryInfo.breadcrumbs,
       popularityScore:scores.popularity,trendingScore:scores.trending,
-      iconUrl:iconUrl||null,coverImageUrl:coverImage||null,screenshots,playStoreUrl:playStore||null,downloadPageUrl:downloadPage||null,directDownloadUrl:directDownload||null,officialUrl:officialUrl||null,licenseName:licenseName||null,
+      iconUrl:iconUrl||null,coverImageUrl:coverImage||null,screenshots,playStoreUrl:playStore||null,downloadPageUrl:downloadPage||null,officialUrl:officialUrl||null,licenseName:licenseName||null,
       language:language||null,downloadCount,labels:compactLabelObject(labels)
     }
   };
@@ -621,40 +582,11 @@ async function crawlListings(maxPages=DEFAULT_DAILY_PAGES,limit=DEFAULT_MAX_ITEM
   return apps;
 }
 
-async function fetchPackageDetails(pageUrl,{signal,includeDownload=false}={}) {
+async function fetchPackageDetails(pageUrl,{signal}={}) {
   const {text,url}=await fetchText(pageUrl,{signal});
   const d=await parseAppPage(text,url);
   if(!d.looksLikeAppPage)throw new Error('LiteAPKs did not return a recognizable app detail page.');
-  if(includeDownload&&d.downloadPageUrl){
-    try{
-      const landing=await fetchText(d.downloadPageUrl,{signal});
-      const parsed=parseDownloadLanding(landing.text,landing.url);
-      d.downloadPageUrl=parsed.pageUrl||d.downloadPageUrl;
-      if(parsed.version)d.version=parsed.version;
-      if(parsed.fileSizeBytes)d.fileSizeBytes=parsed.fileSizeBytes;
-      if(parsed.apkFormat)d.apkFormat=parsed.apkFormat;
-      // The detail page often only contains a download landing page. Check the landing page
-      // for a publicly exposed final APK-family URL and store it for copy/download actions.
-      const landing$=cheerio.load(String(landing.text || ''));
-      let resolvedDirect=await directPublicFileUrl(landing$,{},landing.url);
-      // If LiteAPKs generates the final file URL with JavaScript, try the browser resolver.
-      if(!resolvedDirect){
-        resolvedDirect = await resolveFinalDownloadUrl(d.downloadPageUrl);
-      }
-      if(resolvedDirect){
-        d.directDownloadUrl=resolvedDirect;
-        d.metadata.directDownloadUrl=resolvedDirect;
-      }
-      d.metadata.downloadPageUrl=d.downloadPageUrl;
-      d.metadata.downloadVersion=parsed.version||null;
-      d.metadata.downloadSize=parsed.sizeText||null;
-      d.metadata.downloadApkFormat=parsed.apkFormat||null;
-      d.metadata.downloadPageCheckedAt=new Date().toISOString();
-    }catch(err){
-      if(err.code==='SOURCE_STOPPED')throw err;
-      d.metadata.downloadPageError=String(err.message||err).slice(0,500);
-    }
-  }
+
   return d;
 }
 
@@ -954,26 +886,44 @@ async function enrichManagedAppById(id) {
   }
 }
 
-async function refreshMediaForApp(id) {
-  const db=getPool();const [[app]]=await db.query('SELECT * FROM apps WHERE id=? LIMIT 1',[Number(id)]);
-  if(!app)throw Object.assign(new Error('App not found.'),{status:404});
+const mediaRefreshBusy=new Set();
+async function refreshMediaForApp(id,{kinds=['icon','cover','screenshot']}={}) {
+  id=Number(id);
+  if(!Number.isSafeInteger(id)||id<1)throw Object.assign(new Error('Invalid app ID.'),{status:400});
+  const allowed=new Set(['icon','cover','screenshot']);
+  if(!Array.isArray(kinds)||!kinds.length||kinds.some(k=>!allowed.has(k)))throw Object.assign(new Error('Select icon, cover, or screenshot media.'),{status:400});
+  kinds=[...new Set(kinds)];
+  if(mediaRefreshBusy.has(id))throw Object.assign(new Error('A media refresh is already running for this app.'),{status:409});
+  mediaRefreshBusy.add(id);
+  const db=getPool();
   try{
+    const [[app]]=await db.query('SELECT * FROM apps WHERE id=? LIMIT 1',[id]);
+    if(!app)throw Object.assign(new Error('App not found.'),{status:404});
     const details=await fetchPackageDetails(app.source_page_url);
     if(details.internalPackageId!==app.package_id)throw Object.assign(new Error('Source identity changed. Existing media was preserved.'),{status:409});
     let previous={};try{previous=JSON.parse(app.source_metadata_json||'{}')}catch{}
-    const merged={...previous,...details.metadata};
-    for(const [key,value] of Object.entries(details.metadata||{}))if(value==null||value===''||Array.isArray(value)&&!value.length)if(previous[key]!=null)merged[key]=previous[key];
-    const artwork={iconUrl:merged.iconUrl,coverImageUrl:merged.coverImageUrl,screenshots:merged.screenshots};
+    const merged={...previous};
+    const keys={icon:'iconUrl',cover:'coverImageUrl',screenshot:'screenshots'};
+    const artwork={},sourceReturnedKinds=[],retainedKinds=[];
+    for(const kind of kinds){
+      const key=keys[kind],value=details.metadata?.[key];
+      if(value!=null&&value!==''&&(!Array.isArray(value)||value.length)){
+        merged[key]=value;artwork[key]=value;sourceReturnedKinds.push(kind);
+      }else{
+        retainedKinds.push(kind);
+      }
+    }
     const conn=await db.getConnection();
     try{
       await conn.beginTransaction();
-      await conn.query("UPDATE apps SET source_metadata_json=?,metadata_status='ready',metadata_error=NULL,metadata_updated_at=NOW(),category=COALESCE(NULLIF(?,''),category),category_slug=COALESCE(?,category_slug),category_url=COALESCE(?,category_url),source_section=COALESCE(?,source_section) WHERE id=?",[JSON.stringify(merged),details.category==='Other'?null:details.category,details.category==='Other'?null:details.categorySlug,details.categoryUrl,details.category==='Other'?null:details.sourceSection,id]);
+      await conn.query("UPDATE apps SET source_metadata_json=?,metadata_updated_at=NOW() WHERE id=?",[JSON.stringify(merged),id]);
       await conn.query('INSERT INTO apk_metadata (app_id,metadata_json) VALUES (?,?) ON DUPLICATE KEY UPDATE metadata_json=VALUES(metadata_json)',[id,JSON.stringify(merged)]);
-      await syncMedia(Number(id),artwork,{db:conn});
+      await syncMedia(id,artwork,{db:conn});
       await conn.commit();
     }catch(err){await conn.rollback();throw err}finally{conn.release()}
-    return {appId:Number(id),icon:Boolean(merged.iconUrl),cover:Boolean(merged.coverImageUrl),screenshots:Array.isArray(merged.screenshots)?merged.screenshots.length:0};
-  }catch(err){await db.query('UPDATE apps SET metadata_error=? WHERE id=?',[String(err.message||err).slice(0,1800),id]);throw err}
+    return {appId:id,icon:Boolean(merged.iconUrl),cover:Boolean(merged.coverImageUrl),screenshots:Array.isArray(merged.screenshots)?merged.screenshots.length:0,requestedKinds:kinds,sourceReturnedKinds,retainedKinds};
+  }catch(err){await db.query('UPDATE apps SET metadata_error=? WHERE id=?',[String(err.message||err).slice(0,1800),id]).catch(()=>{});throw err}
+  finally{mediaRefreshBusy.delete(id)}
 }
 
 async function prepareApp(id) {
@@ -1002,16 +952,6 @@ async function checkUpdateForApp(app,{signal}={}) {
   await upsertManaged(details,{autoAdd:false});
   await getPool().query(`UPDATE apps SET latest_version=?,update_available=?,last_checked_at=NOW(),update_error=NULL,source_updated_at=COALESCE(?,source_updated_at) WHERE id=?`,[details.version||app.current_version,available?1:0,details.updatedDate,app.id]);
   return {details,available,reason};
-}
-
-async function resolveDownloadForApp(id) {
-  const db=getPool();
-  const [[app]]=await db.query('SELECT * FROM apps WHERE id=? LIMIT 1',[Number(id)]);
-  if(!app)throw Object.assign(new Error('APK not found.'),{status:404});
-  const details=await fetchPackageDetails(app.source_page_url,{includeDownload:true});
-  await upsertManaged(details,{autoAdd:false});
-  if(details.directDownloadUrl)return {url:details.directDownloadUrl,mode:'direct'};
-  throw Object.assign(new Error('Direct APK/XAPK/APKS file URL was not resolved from the public source page.'),{status:404,code:'DIRECT_LINK_NOT_FOUND'});
 }
 
 async function markUpdated(id) {
@@ -1080,6 +1020,6 @@ module.exports={
   BASE_URL,SOURCE_TYPE,PLATFORM_KEY,SYNC_KEY,
   parseAppPage,discoverLinks,fetchPackageDetails,getSyncState,startSync,stopSync,step,startApkResolverWorker,
   taxonomyState,refreshTaxonomy,categoryDescendants,refreshRankings,
-  ensureManagedFromUrl,enrichManagedAppById,refreshMediaForApp,prepareApp,checkUpdateForApp,markUpdated,resolveDownloadForApp,searchCatalog,
+  ensureManagedFromUrl,enrichManagedAppById,refreshMediaForApp,prepareApp,checkUpdateForApp,markUpdated,searchCatalog,
   internalPackageId,normalizeSourceUrl,isLikelyAppUrl
 };

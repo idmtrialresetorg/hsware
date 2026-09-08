@@ -50,7 +50,6 @@ function mediaFromApp(row) {
     coverImageUrl: uniqueUrls([meta.coverImageUrl])[0] || null,
     screenshots: uniqueUrls(Array.isArray(meta.screenshots) ? meta.screenshots : []).slice(0, MAX_SCREENSHOTS),
     playStoreUrl: uniqueUrls([meta.playStoreUrl])[0] || null,
-    directDownloadUrl: uniqueUrls([meta.directDownloadUrl])[0] || null,
     apkType: String(meta.apkType || meta.modInfo || '').trim() || null
   };
 }

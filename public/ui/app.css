@@ -683,3 +683,68 @@ body{font-size:17px;line-height:1.47;background:#000}
 @media(max-width:1200px){.import-control-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.app-detail-body .android-detail-layout{grid-template-columns:minmax(0,1fr) 220px}.app-detail-body .android-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.app-detail-body .android-detail-layout{grid-template-columns:1fr}.app-detail-body .apk-media-card{max-width:none}.app-detail-body .android-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.library-tools{padding:14px}.import-control-grid{grid-template-columns:1fr}.taxonomy-tools,.library-import-head{align-items:stretch;flex-direction:column}.taxonomy-tools .btn,.library-import-head .btn{width:100%}.app-detail-header,.app-detail-body,.app-detail-panel .panel-body{padding:16px}.app-detail-heading .detail-title{font-size:21px}.app-detail-header .form-row{justify-content:flex-start}.app-detail-header .form-row .btn{flex:1}.app-detail-body .android-fields,.app-detail-body .android-link-fields{grid-template-columns:1fr}.app-detail-body .apk-cover-hero{aspect-ratio:16/9;min-height:150px}.workspace-breadcrumb{gap:8px;flex-wrap:wrap}.app-detail-body .apk-screenshot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ===================================================================
+   Appbit record workspace — full-page application detail, no overlay.
+   Inspired by the supplied compact publishing-workspace reference.
+   =================================================================== */
+.app-record-page{width:100%;max-width:1440px;margin:0 auto;display:flex;flex-direction:column;gap:14px;min-width:0}
+.app-record-page .panel{margin:0;overflow:hidden;background:var(--surface);border:1px solid var(--hairline);border-radius:16px;box-shadow:none}
+.record-toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:16px 18px;border:1px solid var(--hairline);border-radius:16px;background:var(--surface)}
+.record-identity{display:flex;align-items:center;gap:14px;min-width:0;flex:1}
+.record-app-icon{width:60px;height:60px;flex:0 0 60px;display:flex;align-items:center;justify-content:center;border:1px solid var(--hairline);border-radius:14px;overflow:hidden;background:var(--surface-soft)}
+.record-app-icon img{width:100%;height:100%;object-fit:contain;padding:5px}
+.workspace-icon-empty{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:25px;font-weight:600;color:var(--muted)}
+.record-identity-text{min-width:0;flex:1}
+.record-eyebrow{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--primary);line-height:1.5}
+.record-name-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
+.record-name-line h1{font-size:23px;line-height:1.2;letter-spacing:-.025em;font-weight:600;margin:0;color:var(--ink);overflow-wrap:anywhere}
+.record-version{font-family:var(--font-mono);font-size:11px;color:var(--body);padding:3px 7px;background:var(--surface-strong);border-radius:6px}
+.record-name-line .status{font-size:10px}
+.record-subline{color:var(--muted);font-size:12px;margin-top:5px;overflow-wrap:anywhere;line-height:1.5}
+.record-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px}
+.record-actions .btn{height:34px;border-radius:8px;font-size:12px;padding:0 13px}
+.record-message:empty{display:none}
+.record-message .notice{margin:0}
+.app-record-page .record-cover{padding:0}
+.record-cover-stage{height:clamp(180px,23vw,320px);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--canvas)}
+.record-cover-stage>img{width:100%;height:100%;object-fit:contain;display:block}
+.record-cover-empty{display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);font-size:13px;max-width:470px;line-height:1.6}
+.record-cover-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-top:1px solid var(--hairline);color:var(--muted);font-size:11px;font-weight:600}
+.record-cover-footer .btn{border-radius:8px}
+.record-columns{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start;min-width:0}
+.record-main-column,.record-side-column{display:flex;flex-direction:column;gap:14px;min-width:0}
+.app-record-page .record-section{padding:16px;min-width:0}
+.record-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;flex-wrap:wrap}
+.record-section-head h2{font-size:16px;font-weight:600;letter-spacing:-.015em;line-height:1.3;color:var(--ink);margin:2px 0 0}
+.record-heading-count{font-size:11px;font-family:var(--font-mono);font-weight:500;color:var(--muted);margin-left:5px}
+.record-section-head .btn{border-radius:8px}
+.record-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.record-fields .field,.record-links .field{background:var(--surface-soft);min-height:60px;padding:10px 12px;border-radius:10px;border:1px solid var(--hairline)}
+.record-fields .field-value{overflow-wrap:anywhere;font-weight:600;font-size:12.5px}
+.record-links{display:grid;grid-template-columns:1fr;gap:8px}
+.record-links .field-value{font-weight:500}
+.record-links a{color:var(--primary);font-weight:600}
+.record-links .btn{height:26px;border-radius:8px}
+.record-media-preview{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1/1;background:var(--canvas);border:1px solid var(--hairline);border-radius:12px;overflow:hidden;padding:22px}
+.record-media-preview img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:18px}
+.record-media-actions{display:grid;gap:8px;margin-top:12px}
+.record-media-actions .btn{width:100%;border-radius:8px;min-height:36px;height:auto;padding:8px 12px;white-space:normal;text-align:center}
+.record-media-section .helper{margin-top:10px}
+.record-description{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--body);font-size:13.5px;line-height:1.75;background:var(--surface-soft);border:1px solid var(--hairline);padding:16px;border-radius:10px}
+.record-screenshot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;align-items:start}
+.record-shot{display:flex;flex-direction:column;min-width:0;gap:8px;padding:7px;border:1px solid var(--hairline);border-radius:12px;background:var(--surface-soft)}
+.record-shot img{display:block;width:100%;height:190px;object-fit:contain;background:var(--canvas);border-radius:8px}
+.record-shot span{font-size:11px;color:var(--muted);padding:0 3px 3px;text-align:center}
+.record-shot:hover{border-color:var(--primary)}
+.record-versions{border:1px solid var(--hairline);border-radius:10px;overflow:hidden}
+.record-version-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:12px 14px;border-bottom:1px solid var(--hairline);background:var(--surface-soft)}
+.record-version-row:last-child{border-bottom:0}
+.record-version-row>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.record-version-row span{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.record-version-row b{font-size:12px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.record-bottom{padding:2px 0 12px}
+.record-bottom .btn{border-radius:8px}
+@media(max-width:1200px){.record-columns{grid-template-columns:minmax(0,1fr) 250px}.record-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.record-actions{justify-content:flex-start}}
+@media(max-width:900px){.record-columns{grid-template-columns:1fr}.record-side-column{max-width:none}.record-media-preview{aspect-ratio:auto;height:220px}.record-media-preview img{width:auto;height:100%}.record-media-actions{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.app-record-page{gap:12px}.record-toolbar{padding:14px;gap:14px}.record-app-icon{width:52px;height:52px;flex-basis:52px}.record-name-line h1{font-size:19px}.record-actions{width:100%;justify-content:flex-start}.record-actions .btn{flex:1 1 auto;min-height:40px;height:auto;padding:9px 11px;white-space:normal}.record-cover-stage{height:190px}.record-cover-footer{flex-wrap:wrap}.app-record-page .record-section{padding:14px}.record-fields{grid-template-columns:1fr}.record-media-actions{grid-template-columns:1fr}.record-screenshot-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.record-shot img{height:145px}.record-version-row{grid-template-columns:repeat(2,minmax(0,1fr))}.record-description{padding:13px;font-size:13px}}

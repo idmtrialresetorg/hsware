@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: readable slugs are stable, unique by stored ID, and reject malformed IDs
+ok 1 - readable slugs are stable, unique by stored ID, and reject malformed IDs
+  ---
+  duration_ms: 1.988286
+  type: 'test'
+  ...
+# Subtest: the existing production shell accepts canonical and legacy app paths
+ok 2 - the existing production shell accepts canonical and legacy app paths
+  ---
+  duration_ms: 13.934334
+  type: 'test'
+  ...
+# Subtest: API resolves slug to saved record without creating or modifying any app
+ok 3 - API resolves slug to saved record without creating or modifying any app
+  ---
+  duration_ms: 4.308148
+  type: 'test'
+  ...
+# Subtest: API removes final-download route and does not expose old direct file URLs
+ok 4 - API removes final-download route and does not expose old direct file URLs
+  ---
+  duration_ms: 7.060857
+  type: 'test'
+  ...
+# Subtest: media endpoint passes selected kinds for only the requested app
+ok 5 - media endpoint passes selected kinds for only the requested app
+  ---
+  duration_ms: 2.606606
+  type: 'test'
+  ...
+# Subtest: source URLs refuse private/non-LiteAPKs destinations and redirects
+ok 6 - source URLs refuse private/non-LiteAPKs destinations and redirects
+  ---
+  duration_ms: 30.988492
+  type: 'test'
+  ...
+# Subtest: 403 and challenge stop immediately; 429 is bounded and never bypassed
+ok 7 - 403 and challenge stop immediately; 429 is bounded and never bypassed
+  ---
+  duration_ms: 4107.82834
+  type: 'test'
+  ...
+# Subtest: manual import Stop during discovery cannot later restart or overwrite state
+ok 8 - manual import Stop during discovery cannot later restart or overwrite state
+  ---
+  duration_ms: 9.365539
+  type: 'test'
+  ...
+# Subtest: manual worker pauses 403 and preserves its queue; explicit new run recovers
+ok 9 - manual worker pauses 403 and preserves its queue; explicit new run recovers
+  ---
+  duration_ms: 7.126442
+  type: 'test'
+  ...
+# Subtest: an in-flight media refresh is transactional, targets one app, and preserves missing artwork
+ok 10 - an in-flight media refresh is transactional, targets one app, and preserves missing artwork
+  ---
+  duration_ms: 4.714223
+  type: 'test'
+  ...
+# Subtest: existing saved taxonomy is reused without fetch; descendants include nested categories
+ok 11 - existing saved taxonomy is reused without fetch; descendants include nested categories
+  ---
+  duration_ms: 6.566344
+  type: 'test'
+  ...
+# Subtest: update engine is never started by idle step and Stop owns the active run
+ok 12 - update engine is never started by idle step and Stop owns the active run
+  ---
+  duration_ms: 5.711596
+  type: 'test'
+  ...
+# Subtest: App Library preserves1853 count and requests20 per page
+ok 13 - App Library preserves1853 count and requests20 per page
+  ---
+  duration_ms: 30.624169
+  type: 'test'
+  ...
+# Subtest: category selection has its own count and pagination
+ok 14 - category selection has its own count and pagination
+  ---
+  duration_ms: 5.558955
+  type: 'test'
+  ...
+# Subtest: detail uses full page, only Play Store, updated date, copy description
+ok 15 - detail uses full page, only Play Store, updated date, copy description
+  ---
+  duration_ms: 10.411276
+  type: 'test'
+  ...
+# Subtest: per-app media refresh calls only selected app endpoint
+ok 16 - per-app media refresh calls only selected app endpoint
+  ---
+  duration_ms: 5.748034
+  type: 'test'
+  ...
+# Subtest: Add APK is routed and submits the supplied URL
+ok 17 - Add APK is routed and submits the supplied URL
+  ---
+  duration_ms: 6.365966
+  type: 'test'
+  ...
+# Subtest: Library manual batch limits, start and stop do not run automatically
+ok 18 - Library manual batch limits, start and stop do not run automatically
+  ---
+  duration_ms: 7.143252
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4236.112361
